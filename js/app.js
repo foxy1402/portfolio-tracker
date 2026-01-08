@@ -145,9 +145,17 @@ const PortfolioApp = {
       throw new Error('Not authenticated');
     }
 
-    const gistId = this.getGistId();
+    let gistId = this.getGistId();
+
+    // If no local Gist ID, search for existing portfolio gist
     if (!gistId) {
-      return { success: false, message: 'No Gist ID saved. Sync up first.' };
+      const found = await this.findExistingGist();
+      if (found) {
+        gistId = found;
+        this.setGistId(gistId); // Save for future use
+      } else {
+        return { success: false, message: 'No portfolio found in your Gists. Push first on another device.' };
+      }
     }
 
     try {
@@ -174,6 +182,34 @@ const PortfolioApp = {
     } catch (error) {
       console.error('Sync from Gist failed:', error);
       throw error;
+    }
+  },
+
+  // Search user's gists for existing portfolio data
+  async findExistingGist() {
+    try {
+      const response = await fetch(`${this.GIST_API}`, {
+        headers: {
+          'Authorization': `Bearer ${this._sessionToken}`
+        }
+      });
+
+      if (!response.ok) return null;
+
+      const gists = await response.json();
+
+      // Find gist with portfolio_data.json file
+      for (const gist of gists) {
+        if (gist.files && gist.files['portfolio_data.json']) {
+          console.log('Found existing portfolio Gist:', gist.id);
+          return gist.id;
+        }
+      }
+
+      return null;
+    } catch (error) {
+      console.error('Error searching for Gist:', error);
+      return null;
     }
   },
 
