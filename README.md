@@ -5,12 +5,15 @@ A beautiful portfolio tracker for crypto, tokenized US stocks, and tokenized gol
 ## Features
 
 - 📊 **Interactive Pie Chart** - Visual distribution by category with hover details
+- ⚖️ **Rebalance Calculator** - Calculate exact buy/sell amounts to hit target %
+- 🎯 **Smart Allocation** - Set target % per category AND per asset
+- 📱 **Installable App (PWA)** - Install on Android/iOS with offline support
+- 📳 **Mobile Mode** - Toggle optimized layout for phone screens
 - 💰 **ROI Tracking** - Track profit/loss vs your buy price
 - 🔄 **Real-time Prices** - CoinGecko API for live pricing
 - ☁️ **Cloud Sync** - Sync data across devices via GitHub Gist
 - 🔐 **Secure Auth** - Token stored in memory only (never saved)
 - 💾 **Offline Support** - Works offline with localStorage
-- 📱 **Responsive Design** - Mobile and desktop friendly
 
 ## Deploy to GitHub Pages
 
@@ -24,6 +27,23 @@ A beautiful portfolio tracker for crypto, tokenized US stocks, and tokenized gol
    ```
 2. Go to **Settings** → **Pages** → Select **main** branch → Save
 3. Access at `https://YOUR_USERNAME.github.io/portfolio-tracker/`
+4. **Install App:** Open link on mobile → Tap "Add to Home Screen" or "Install App"
+
+## New Features
+
+### ⚖️ Rebalance Calculator
+A powerful tool to help you maintain your desired portfolio structure.
+- **Category Targets:** Set how much % you want in Crypto vs Stocks vs Gold.
+- **Deep Dive:** Expand categories to select/deselect specific assets.
+- **Precise Control:** Set individual target allocation for each asset within its category.
+- **Action Plan:** Get a clear "Buy" or "Sell" list with exact dollar amounts.
+
+### 📱 Mobile Mode
+Click the **📱** icon in the header to switch to a phone-optimized layout.
+- Moves the Pie Chart to the top.
+- Stacks category summaries below it.
+- Moves the asset list to the bottom for better one-handed usage.
+- Remembers your preference forever on that device.
 
 ## Usage
 
