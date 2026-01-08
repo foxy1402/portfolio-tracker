@@ -141,22 +141,65 @@ class PortfolioChart {
       </div>
     `;
 
-        // Position tooltip
-        const tooltipRect = this.tooltip.getBoundingClientRect();
-        let left = x + 15;
-        let top = y + 15;
+        // Check for mobile mode
+        const isMobile = window.innerWidth <= 600 || document.body.classList.contains('mobile-mode');
 
-        // Keep tooltip on screen
-        if (left + tooltipRect.width > window.innerWidth) {
-            left = x - tooltipRect.width - 15;
-        }
-        if (top + tooltipRect.height > window.innerHeight) {
-            top = y - tooltipRect.height - 15;
+        if (isMobile) {
+            this.tooltip.classList.add('mobile-center');
+            // Remove inline styles for positioning
+            this.tooltip.style.left = '';
+            this.tooltip.style.top = '';
+        } else {
+            this.tooltip.classList.remove('mobile-center');
+            // Position tooltip
+            const tooltipRect = this.tooltip.getBoundingClientRect();
+            let left = x + 15;
+            let top = y + 15;
+
+            // Keep tooltip on screen
+            if (left + tooltipRect.width > window.innerWidth) {
+                left = x - tooltipRect.width - 15;
+            }
+            if (top + tooltipRect.height > window.innerHeight) {
+                top = y - tooltipRect.height - 15;
+            }
+
+            this.tooltip.style.left = left + 'px';
+            this.tooltip.style.top = top + 'px';
         }
 
-        this.tooltip.style.left = left + 'px';
-        this.tooltip.style.top = top + 'px';
         this.tooltip.classList.add('visible');
+
+        // Add click listener to close on mobile if not already added
+        if (isMobile && !this._hasCloseListener) {
+            const closeHandler = (e) => {
+                if (!this.tooltip.contains(e.target) && !e.target.closest('.legend-item')) {
+                    this.hideTooltip();
+                    document.removeEventListener('click', closeHandler);
+                    this._hasCloseListener = false;
+                }
+            };
+            // Delay adding listener to avoid immediate closing from the trigger click
+            setTimeout(() => {
+                document.addEventListener('click', closeHandler);
+                this._hasCloseListener = true;
+            }, 10);
+        }
+    }
+
+    showTooltipForCategory(category) {
+        const segment = this.segments.find(s => s.category === category);
+        if (segment) {
+            // For mobile, coordinates don't matter as it will be centered
+            // For desktop, we can default to center of screen or simply rely on mobile logic if triggered by legend
+            // We'll treat legend clicks as "mobile-like" behavior (centered) if on mobile, 
+            // but on desktop we might want it near the legend? 
+            // Simplest is to treat legend clicks as centering requests on mobile.
+            // On desktop, legend clicks might be weird if it spawns a floating tooltip. 
+            // Let's assume this is primarily for mobile per user request.
+
+            this.showTooltip(0, 0, segment);
+        }
     }
 
     hideTooltip() {

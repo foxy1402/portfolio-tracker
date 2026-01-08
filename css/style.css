@@ -258,7 +258,21 @@ body::before {
   font-weight: 500;
 }
 
+
+.chart-tooltip.mobile-center {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90%;
+  max-width: 320px;
+  z-index: 2000;
+  box-shadow: 0 0 0 100vh rgba(0, 0, 0, 0.5);
+  /* Dim background */
+}
+
 /* Legend */
+
 .legend {
   display: flex;
   justify-content: center;

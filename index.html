@@ -293,6 +293,14 @@
       // Initialize chart
       chart = new PortfolioChart('portfolioChart', 'chartTooltip');
 
+      // Add legend click listeners
+      document.querySelectorAll('.legend-item').forEach(item => {
+        item.addEventListener('click', () => {
+          const category = item.dataset.category;
+          chart.showTooltipForCategory(category);
+        });
+      });
+
       // Load and display data
       await refreshData();
     }
