@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Portfolio Rebalance Calculator - Calculate what to buy or sell">
+    <title>Portfolio Tracker | Rebalance Calculator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .rebalance-container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .current-allocation {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: var(--spacing-md);
+            margin-bottom: var(--spacing-lg);
+        }
+
+        @media (max-width: 600px) {
+            .current-allocation {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .allocation-card {
+            background: var(--bg-glass);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-md);
+            text-align: center;
+        }
+
+        .allocation-card.crypto {
+            border-color: var(--accent-crypto);
+        }
+
+        .allocation-card.stocks {
+            border-color: var(--accent-stocks);
+        }
+
+        .allocation-card.gold {
+            border-color: var(--accent-gold);
+        }
+
+        .allocation-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .allocation-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .allocation-value.crypto {
+            color: var(--accent-crypto);
+        }
+
+        .allocation-value.stocks {
+            color: var(--accent-stocks);
+        }
+
+        .allocation-value.gold {
+            color: var(--accent-gold);
+        }
+
+        .allocation-percent {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        .target-inputs {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: var(--spacing-md);
+            margin-bottom: var(--spacing-md);
+        }
+
+        @media (max-width: 600px) {
+            .target-inputs {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .target-input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .target-input-label {
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .target-input-label .emoji {
+            font-size: 1.2rem;
+        }
+
+        .target-input {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 12px;
+            font-size: 1.1rem;
+            color: var(--text-primary);
+            text-align: center;
+            width: 100%;
+        }
+
+        .target-input:focus {
+            outline: none;
+            border-color: var(--accent-crypto);
+        }
+
+        .target-total {
+            text-align: center;
+            padding: var(--spacing-sm);
+            border-radius: var(--radius-sm);
+            margin-bottom: var(--spacing-md);
+            font-weight: 500;
+        }
+
+        .target-total.valid {
+            background: rgba(0, 212, 170, 0.1);
+            color: var(--accent-stocks);
+        }
+
+        .target-total.invalid {
+            background: rgba(255, 80, 80, 0.1);
+            color: #ff5050;
+        }
+
+        .results-section {
+            margin-top: var(--spacing-lg);
+        }
+
+        .result-category {
+            margin-bottom: var(--spacing-lg);
+        }
+
+        .result-category-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--spacing-sm) var(--spacing-md);
+            background: var(--bg-glass);
+            border-radius: var(--radius-md);
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .result-category-title {
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .result-category-action {
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+
+        .result-category-action.buy {
+            color: var(--accent-stocks);
+        }
+
+        .result-category-action.sell {
+            color: #ff5050;
+        }
+
+        .result-category-action.hold {
+            color: var(--text-muted);
+        }
+
+        .asset-result {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--spacing-sm) var(--spacing-md);
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            margin-bottom: 8px;
+        }
+
+        .asset-result-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .asset-result-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .asset-result-icon.crypto {
+            background: linear-gradient(135deg, var(--accent-crypto), #8b5cf6);
+        }
+
+        .asset-result-icon.stocks {
+            background: linear-gradient(135deg, var(--accent-stocks), #10b981);
+        }
+
+        .asset-result-icon.gold {
+            background: linear-gradient(135deg, var(--accent-gold), #f59e0b);
+        }
+
+        .asset-result-icon img {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+        }
+
+        .asset-result-name {
+            font-weight: 500;
+        }
+
+        .asset-result-details {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .asset-result-action {
+            text-align: right;
+        }
+
+        .action-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: var(--radius-sm);
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+
+        .action-badge.buy {
+            background: rgba(0, 212, 170, 0.15);
+            color: var(--accent-stocks);
+        }
+
+        .action-badge.sell {
+            background: rgba(255, 80, 80, 0.15);
+            color: #ff5050;
+        }
+
+        .action-badge.hold {
+            background: rgba(128, 128, 128, 0.15);
+            color: var(--text-muted);
+        }
+
+        .action-amount {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .summary-box {
+            background: linear-gradient(135deg, var(--bg-glass), var(--bg-secondary));
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-lg);
+            margin-top: var(--spacing-lg);
+        }
+
+        .summary-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: var(--spacing-md);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: var(--spacing-md);
+        }
+
+        @media (max-width: 480px) {
+            .summary-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .summary-item {
+            padding: var(--spacing-sm);
+            background: var(--bg-primary);
+            border-radius: var(--radius-sm);
+        }
+
+        .summary-item-label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .summary-item-value {
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        .summary-item-value.positive {
+            color: var(--accent-stocks);
+        }
+
+        .summary-item-value.negative {
+            color: #ff5050;
+        }
+
+        .no-assets-message {
+            text-align: center;
+            padding: var(--spacing-xl);
+            color: var(--text-secondary);
+        }
+
+        .no-assets-message a {
+            color: var(--accent-crypto);
+        }
+
+        .loading {
+            text-align: center;
+            padding: var(--spacing-lg);
+            color: var(--text-secondary);
+        }
+
+        .loading::after {
+            content: '';
+            animation: dots 1.5s infinite;
+        }
+
+        @keyframes dots {
+
+            0%,
+            20% {
+                content: '.';
+            }
+
+            40% {
+                content: '..';
+            }
+
+            60%,
+            100% {
+                content: '...';
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container rebalance-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <div class="logo-icon">⚖️</div>
+                Rebalance Calculator
+            </div>
+            <nav>
+                <a href="index.html" class="nav-link">
+                    ← Back to Dashboard
+                </a>
+            </nav>
+        </header>
+
+        <main>
+            <!-- Current Portfolio Summary -->
+            <div class="card fade-in">
+                <div class="card-title">📊 Current Allocation</div>
+                <div id="currentAllocation" class="current-allocation">
+                    <div class="loading">Loading portfolio</div>
+                </div>
+                <div style="text-align: center; color: var(--text-muted); font-size: 0.9rem;" id="totalValue">
+                    Total Portfolio: $0
+                </div>
+            </div>
+
+            <!-- Target Allocation Input -->
+            <div class="card fade-in" style="margin-top: var(--spacing-lg);">
+                <div class="card-title">🎯 Target Allocation</div>
+                <p style="color: var(--text-secondary); margin-bottom: var(--spacing-md); font-size: 0.9rem;">
+                    Enter your desired allocation percentages. They must add up to 100%.
+                </p>
+
+                <div class="target-inputs">
+                    <div class="target-input-group">
+                        <label class="target-input-label">
+                            <span class="emoji">🪙</span> Crypto
+                        </label>
+                        <input type="number" class="target-input" id="targetCrypto" value="50" min="0" max="100"
+                            step="1">
+                        <span style="text-align: center; color: var(--text-muted);">%</span>
+                    </div>
+                    <div class="target-input-group">
+                        <label class="target-input-label">
+                            <span class="emoji">📈</span> Stocks
+                        </label>
+                        <input type="number" class="target-input" id="targetStocks" value="30" min="0" max="100"
+                            step="1">
+                        <span style="text-align: center; color: var(--text-muted);">%</span>
+                    </div>
+                    <div class="target-input-group">
+                        <label class="target-input-label">
+                            <span class="emoji">🥇</span> Gold
+                        </label>
+                        <input type="number" class="target-input" id="targetGold" value="20" min="0" max="100" step="1">
+                        <span style="text-align: center; color: var(--text-muted);">%</span>
+                    </div>
+                </div>
+
+                <div class="target-total" id="targetTotal">Total: 100%</div>
+
+                <button class="btn btn-primary btn-block" id="calculateBtn">
+                    🧮 Calculate Rebalance
+                </button>
+            </div>
+
+            <!-- Results Section -->
+            <div class="results-section" id="resultsSection" style="display: none;">
+                <div class="card fade-in">
+                    <div class="card-title">📋 Rebalance Actions</div>
+                    <div id="resultsContent"></div>
+                </div>
+
+                <!-- Summary Box -->
+                <div class="summary-box" id="summaryBox">
+                    <div class="summary-title">📊 Summary</div>
+                    <div class="summary-grid" id="summaryGrid"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/app.js"></script>
+    <script>
+        // Rebalance Calculator Logic
+        let portfolioData = null;
+
+        async function initRebalance() {
+            await loadPortfolio();
+            setupEventListeners();
+            validateTargets();
+        }
+
+        async function loadPortfolio() {
+            try {
+                portfolioData = await PortfolioApp.calculatePortfolio();
+                renderCurrentAllocation();
+            } catch (error) {
+                console.error('Error loading portfolio:', error);
+                document.getElementById('currentAllocation').innerHTML = `
+          <div class="no-assets-message">
+            Error loading portfolio. <a href="index.html">Go to dashboard</a>
+          </div>
+        `;
+            }
+        }
+
+        function renderCurrentAllocation() {
+            const container = document.getElementById('currentAllocation');
+            const totalEl = document.getElementById('totalValue');
+
+            if (!portfolioData || portfolioData.grandTotal === 0) {
+                container.innerHTML = `
+          <div class="no-assets-message" style="grid-column: 1 / -1;">
+            <p>📭 No assets in your portfolio</p>
+            <p><a href="admin.html">Add assets first</a> to use the rebalance calculator</p>
+          </div>
+        `;
+                totalEl.textContent = 'Total Portfolio: $0';
+                return;
+            }
+
+            const { categories, grandTotal } = portfolioData;
+
+            container.innerHTML = `
+        <div class="allocation-card crypto">
+          <div class="allocation-label">Crypto</div>
+          <div class="allocation-value crypto">${PortfolioApp.formatCurrency(categories.crypto.total)}</div>
+          <div class="allocation-percent">${categories.crypto.percentage.toFixed(1)}%</div>
+        </div>
+        <div class="allocation-card stocks">
+          <div class="allocation-label">Stocks</div>
+          <div class="allocation-value stocks">${PortfolioApp.formatCurrency(categories.stocks.total)}</div>
+          <div class="allocation-percent">${categories.stocks.percentage.toFixed(1)}%</div>
+        </div>
+        <div class="allocation-card gold">
+          <div class="allocation-label">Gold</div>
+          <div class="allocation-value gold">${PortfolioApp.formatCurrency(categories.gold.total)}</div>
+          <div class="allocation-percent">${categories.gold.percentage.toFixed(1)}%</div>
+        </div>
+      `;
+
+            totalEl.textContent = `Total Portfolio: ${PortfolioApp.formatCurrency(grandTotal)}`;
+        }
+
+        function setupEventListeners() {
+            // Target input validation
+            const inputs = ['targetCrypto', 'targetStocks', 'targetGold'];
+            inputs.forEach(id => {
+                document.getElementById(id).addEventListener('input', validateTargets);
+            });
+
+            // Calculate button
+            document.getElementById('calculateBtn').addEventListener('click', calculateRebalance);
+        }
+
+        function validateTargets() {
+            const crypto = parseFloat(document.getElementById('targetCrypto').value) || 0;
+            const stocks = parseFloat(document.getElementById('targetStocks').value) || 0;
+            const gold = parseFloat(document.getElementById('targetGold').value) || 0;
+
+            const total = crypto + stocks + gold;
+            const totalEl = document.getElementById('targetTotal');
+            const calcBtn = document.getElementById('calculateBtn');
+
+            totalEl.textContent = `Total: ${total}%`;
+
+            if (total === 100) {
+                totalEl.className = 'target-total valid';
+                calcBtn.disabled = false;
+            } else {
+                totalEl.className = 'target-total invalid';
+                calcBtn.disabled = true;
+            }
+
+            return total === 100;
+        }
+
+        function calculateRebalance() {
+            if (!validateTargets() || !portfolioData || portfolioData.grandTotal === 0) {
+                return;
+            }
+
+            const targetCrypto = parseFloat(document.getElementById('targetCrypto').value) / 100;
+            const targetStocks = parseFloat(document.getElementById('targetStocks').value) / 100;
+            const targetGold = parseFloat(document.getElementById('targetGold').value) / 100;
+
+            const { categories, grandTotal, assets } = portfolioData;
+
+            // Calculate target values for each category
+            const targets = {
+                crypto: grandTotal * targetCrypto,
+                stocks: grandTotal * targetStocks,
+                gold: grandTotal * targetGold
+            };
+
+            // Calculate difference (positive = need to buy, negative = need to sell)
+            const diffs = {
+                crypto: targets.crypto - categories.crypto.total,
+                stocks: targets.stocks - categories.stocks.total,
+                gold: targets.gold - categories.gold.total
+            };
+
+            // Calculate per-asset recommendations
+            const assetRecommendations = calculateAssetRecommendations(assets, categories, diffs);
+
+            // Render results
+            renderResults(diffs, assetRecommendations, targets);
+        }
+
+        function calculateAssetRecommendations(assets, categories, diffs) {
+            const recommendations = [];
+
+            // For each category, distribute the change proportionally among assets
+            ['crypto', 'stocks', 'gold'].forEach(category => {
+                const categoryAssets = assets.filter(a => a.category === category);
+                const categoryTotal = categories[category].total;
+                const categoryDiff = diffs[category];
+
+                if (categoryAssets.length === 0) return;
+
+                categoryAssets.forEach(asset => {
+                    // Calculate this asset's proportion within its category
+                    const proportion = categoryTotal > 0 ? asset.value / categoryTotal : 1 / categoryAssets.length;
+
+                    // This asset's share of the category change
+                    const usdChange = categoryDiff * proportion;
+
+                    // Calculate amount change based on current price
+                    const amountChange = asset.currentPrice > 0 ? usdChange / asset.currentPrice : 0;
+
+                    recommendations.push({
+                        ...asset,
+                        usdChange,
+                        amountChange,
+                        action: usdChange > 1 ? 'buy' : usdChange < -1 ? 'sell' : 'hold'
+                    });
+                });
+            });
+
+            return recommendations;
+        }
+
+        function renderResults(diffs, assetRecommendations, targets) {
+            const resultsSection = document.getElementById('resultsSection');
+            const resultsContent = document.getElementById('resultsContent');
+
+            const categoryLabels = {
+                crypto: { emoji: '🪙', name: 'Crypto' },
+                stocks: { emoji: '📈', name: 'Stocks' },
+                gold: { emoji: '🥇', name: 'Gold' }
+            };
+
+            let html = '';
+
+            // Group recommendations by category
+            ['crypto', 'stocks', 'gold'].forEach(category => {
+                const catAssets = assetRecommendations.filter(a => a.category === category);
+                const catDiff = diffs[category];
+                const { emoji, name } = categoryLabels[category];
+
+                const action = catDiff > 1 ? 'buy' : catDiff < -1 ? 'sell' : 'hold';
+                const actionText = catDiff > 1
+                    ? `Buy ${PortfolioApp.formatCurrency(Math.abs(catDiff))}`
+                    : catDiff < -1
+                        ? `Sell ${PortfolioApp.formatCurrency(Math.abs(catDiff))}`
+                        : 'No change needed';
+
+                html += `
+          <div class="result-category">
+            <div class="result-category-header">
+              <div class="result-category-title">
+                <span>${emoji}</span>
+                <span>${name}</span>
+              </div>
+              <div class="result-category-action ${action}">${actionText}</div>
+            </div>
+        `;
+
+                if (catAssets.length === 0) {
+                    html += `<div class="asset-result"><em style="color: var(--text-muted);">No assets in this category</em></div>`;
+                } else {
+                    catAssets.forEach(asset => {
+                        const actionClass = asset.action;
+                        const actionLabel = asset.action === 'buy'
+                            ? `Buy ${PortfolioApp.formatCurrency(Math.abs(asset.usdChange))}`
+                            : asset.action === 'sell'
+                                ? `Sell ${PortfolioApp.formatCurrency(Math.abs(asset.usdChange))}`
+                                : 'Hold';
+
+                        const amountText = asset.amountChange !== 0
+                            ? `${asset.action === 'buy' ? '+' : ''}${asset.amountChange.toFixed(6)} ${asset.symbol || 'units'}`
+                            : '';
+
+                        // Icon
+                        let iconHtml;
+                        if (asset.iconUrl) {
+                            iconHtml = `<img src="${asset.iconUrl}" alt="${asset.symbol}" onerror="this.style.display='none';this.parentElement.textContent='${asset.symbol ? asset.symbol.substring(0, 2) : '??'}';">`;
+                        } else {
+                            iconHtml = asset.symbol ? asset.symbol.substring(0, 2) : '??';
+                        }
+
+                        html += `
+              <div class="asset-result">
+                <div class="asset-result-info">
+                  <div class="asset-result-icon ${category}">${iconHtml}</div>
+                  <div>
+                    <div class="asset-result-name">${asset.name}</div>
+                    <div class="asset-result-details">
+                      Current: ${asset.balance} ${asset.symbol || ''} (${PortfolioApp.formatCurrency(asset.value)})
+                    </div>
+                  </div>
+                </div>
+                <div class="asset-result-action">
+                  <div class="action-badge ${actionClass}">${actionLabel}</div>
+                  ${amountText ? `<div class="action-amount">${amountText}</div>` : ''}
+                </div>
+              </div>
+            `;
+                    });
+                }
+
+                html += '</div>';
+            });
+
+            resultsContent.innerHTML = html;
+
+            // Render summary
+            const totalToBuy = Object.values(diffs).filter(d => d > 0).reduce((sum, d) => sum + d, 0);
+            const totalToSell = Math.abs(Object.values(diffs).filter(d => d < 0).reduce((sum, d) => sum + d, 0));
+
+            document.getElementById('summaryGrid').innerHTML = `
+        <div class="summary-item">
+          <div class="summary-item-label">Total to Buy</div>
+          <div class="summary-item-value positive">${PortfolioApp.formatCurrency(totalToBuy)}</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-item-label">Total to Sell</div>
+          <div class="summary-item-value negative">${PortfolioApp.formatCurrency(totalToSell)}</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-item-label">Target Crypto</div>
+          <div class="summary-item-value">${PortfolioApp.formatCurrency(targets.crypto)}</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-item-label">Target Stocks</div>
+          <div class="summary-item-value">${PortfolioApp.formatCurrency(targets.stocks)}</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-item-label">Target Gold</div>
+          <div class="summary-item-value">${PortfolioApp.formatCurrency(targets.gold)}</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-item-label">Portfolio Total</div>
+          <div class="summary-item-value">${PortfolioApp.formatCurrency(portfolioData.grandTotal)}</div>
+        </div>
+      `;
+
+            resultsSection.style.display = 'block';
+
+            // Scroll to results
+            resultsSection.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', initRebalance);
+    </script>
+</body>
+
+</html>
