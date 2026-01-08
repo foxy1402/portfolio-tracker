@@ -158,25 +158,8 @@
       order: 2;
     }
 
-    body.mobile-mode .dashboard-grid {
+    body.mobile-mode #assetsSection {
       order: 3;
-    }
-
-    body.mobile-mode #assetsSection {
-      order: 1;
-    }
-
-    body.mobile-mode .dashboard-grid {
-      display: flex;
-      flex-direction: column;
-    }
-
-    body.mobile-mode #chartSection {
-      order: 1;
-    }
-
-    body.mobile-mode #assetsSection {
-      order: 2;
     }
   </style>
 </head>
@@ -227,59 +210,56 @@
         </div>
       </div>
 
-      <!-- Chart and Assets Grid -->
-      <div class="dashboard-grid">
-        <!-- Chart Card -->
-        <div class="card fade-in" id="chartSection">
-          <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
-            Portfolio Distribution
-            <button class="refresh-btn" id="refreshBtn" title="Refresh Prices">🔄</button>
+      <!-- Chart Card -->
+      <div class="card fade-in" id="chartSection">
+        <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+          Portfolio Distribution
+          <button class="refresh-btn" id="refreshBtn" title="Refresh Prices">🔄</button>
+        </div>
+        <div class="chart-container">
+          <div class="chart-wrapper">
+            <canvas id="portfolioChart"></canvas>
+            <div class="chart-center">
+              <div class="chart-total-label">Total Value</div>
+              <div class="chart-total-value" id="totalValue">$0</div>
+            </div>
           </div>
-          <div class="chart-container">
-            <div class="chart-wrapper">
-              <canvas id="portfolioChart"></canvas>
-              <div class="chart-center">
-                <div class="chart-total-label">Total Value</div>
-                <div class="chart-total-value" id="totalValue">$0</div>
-              </div>
+          <div class="legend">
+            <div class="legend-item" data-category="crypto">
+              <span class="legend-color crypto"></span>
+              <span class="legend-label">Crypto</span>
             </div>
-            <div class="legend">
-              <div class="legend-item" data-category="crypto">
-                <span class="legend-color crypto"></span>
-                <span class="legend-label">Crypto</span>
-              </div>
-              <div class="legend-item" data-category="stocks">
-                <span class="legend-color stocks"></span>
-                <span class="legend-label">Stocks</span>
-              </div>
-              <div class="legend-item" data-category="gold">
-                <span class="legend-color gold"></span>
-                <span class="legend-label">Gold</span>
-              </div>
+            <div class="legend-item" data-category="stocks">
+              <span class="legend-color stocks"></span>
+              <span class="legend-label">Stocks</span>
             </div>
-            <!-- Total Profit/Loss -->
-            <div class="total-profit" id="totalProfitContainer" style="display: none;">
-              <div class="total-profit-label">Total P/L</div>
-              <div class="total-profit-value" id="totalProfitValue">$0</div>
+            <div class="legend-item" data-category="gold">
+              <span class="legend-color gold"></span>
+              <span class="legend-label">Gold</span>
             </div>
+          </div>
+          <!-- Total Profit/Loss -->
+          <div class="total-profit" id="totalProfitContainer" style="display: none;">
+            <div class="total-profit-label">Total P/L</div>
+            <div class="total-profit-value" id="totalProfitValue">$0</div>
           </div>
         </div>
+      </div>
 
-        <!-- Assets List Card -->
-        <div class="card fade-in" id="assetsSection">
-          <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
-            Your Assets
-            <span id="portfolioPlainValue"
-              style="font-size: 1rem; color: var(--text-secondary); font-weight: 500;">$0</span>
-          </div>
-          <div class="assets-list" id="assetsList">
-            <div class="empty-state">
-              <div class="empty-state-icon">📭</div>
-              <p>No assets yet</p>
-              <p style="font-size: 0.9rem; margin-top: 0.5rem;">
-                <a href="admin.html" style="color: var(--accent-crypto);">Add your first asset</a>
-              </p>
-            </div>
+      <!-- Assets List Card -->
+      <div class="card fade-in" id="assetsSection">
+        <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+          Your Assets
+          <span id="portfolioPlainValue"
+            style="font-size: 1rem; color: var(--text-secondary); font-weight: 500;">$0</span>
+        </div>
+        <div class="assets-list" id="assetsList">
+          <div class="empty-state">
+            <div class="empty-state-icon">📭</div>
+            <p>No assets yet</p>
+            <p style="font-size: 0.9rem; margin-top: 0.5rem;">
+              <a href="admin.html" style="color: var(--accent-crypto);">Add your first asset</a>
+            </p>
           </div>
         </div>
       </div>
