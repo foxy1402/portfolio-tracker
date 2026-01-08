@@ -121,6 +121,63 @@
         font-size: 1.4rem;
       }
     }
+
+    /* Mobile Mode Toggle */
+    .mobile-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .mobile-toggle input {
+      width: 14px;
+      height: 14px;
+      cursor: pointer;
+      accent-color: var(--accent-crypto);
+    }
+
+    .mobile-toggle:hover {
+      color: var(--text-primary);
+    }
+
+    /* Mobile Mode Layout */
+    body.mobile-mode main {
+      display: flex;
+      flex-direction: column;
+    }
+
+    body.mobile-mode #chartSection {
+      order: 1;
+    }
+
+    body.mobile-mode #statsGrid {
+      order: 2;
+    }
+
+    body.mobile-mode .dashboard-grid {
+      order: 3;
+    }
+
+    body.mobile-mode #assetsSection {
+      order: 1;
+    }
+
+    body.mobile-mode .dashboard-grid {
+      display: flex;
+      flex-direction: column;
+    }
+
+    body.mobile-mode #chartSection {
+      order: 1;
+    }
+
+    body.mobile-mode #assetsSection {
+      order: 2;
+    }
   </style>
 </head>
 
@@ -133,6 +190,10 @@
         Portfolio Tracker
       </div>
       <nav style="display: flex; gap: 12px; align-items: center;">
+        <label class="mobile-toggle" title="Reorder layout for mobile: Chart → Categories → Assets">
+          <input type="checkbox" id="mobileMode">
+          📱
+        </label>
         <a href="rebalance.html" class="nav-link">
           ⚖️ Rebalance
         </a>
@@ -169,7 +230,7 @@
       <!-- Chart and Assets Grid -->
       <div class="dashboard-grid">
         <!-- Chart Card -->
-        <div class="card fade-in">
+        <div class="card fade-in" id="chartSection">
           <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
             Portfolio Distribution
             <button class="refresh-btn" id="refreshBtn" title="Refresh Prices">🔄</button>
@@ -205,7 +266,7 @@
         </div>
 
         <!-- Assets List Card -->
-        <div class="card fade-in">
+        <div class="card fade-in" id="assetsSection">
           <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
             Your Assets
             <span id="portfolioPlainValue"
@@ -385,11 +446,35 @@
       return labels[category] || category;
     }
 
+    // Mobile Mode Toggle
+    function initMobileMode() {
+      const checkbox = document.getElementById('mobileMode');
+      const saved = localStorage.getItem('portfolioMobileMode');
+
+      if (saved === 'true') {
+        checkbox.checked = true;
+        document.body.classList.add('mobile-mode');
+      }
+
+      checkbox.addEventListener('change', function () {
+        if (this.checked) {
+          document.body.classList.add('mobile-mode');
+          localStorage.setItem('portfolioMobileMode', 'true');
+        } else {
+          document.body.classList.remove('mobile-mode');
+          localStorage.setItem('portfolioMobileMode', 'false');
+        }
+      });
+    }
+
     // Event listeners
     document.getElementById('refreshBtn').addEventListener('click', refreshData);
 
     // Initialize on load
-    document.addEventListener('DOMContentLoaded', initDashboard);
+    document.addEventListener('DOMContentLoaded', () => {
+      initMobileMode();
+      initDashboard();
+    });
   </script>
 </body>
 
