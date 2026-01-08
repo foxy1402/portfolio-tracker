@@ -206,7 +206,11 @@
 
         <!-- Assets List Card -->
         <div class="card fade-in">
-          <div class="card-title">Your Assets</div>
+          <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+            Your Assets
+            <span id="portfolioPlainValue"
+              style="font-size: 1rem; color: var(--text-secondary); font-weight: 500;">$0</span>
+          </div>
           <div class="assets-list" id="assetsList">
             <div class="empty-state">
               <div class="empty-state-icon">📭</div>
@@ -263,6 +267,10 @@
       // Update total value - use compact format for large numbers
       document.getElementById('totalValue').textContent =
         PortfolioApp.formatCurrencyCompact(data.grandTotal);
+
+      // Update plain value next to "Your Assets" - full number format
+      document.getElementById('portfolioPlainValue').textContent =
+        new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(data.grandTotal);
 
       // Update category stats
       const categories = ['crypto', 'stocks', 'gold'];
