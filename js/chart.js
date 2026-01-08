@@ -115,7 +115,7 @@ class PortfolioChart {
         return null;
     }
 
-    showTooltip(x, y, segment) {
+    showTooltip(x, y, segment, forceCenter = false) {
         if (!this.tooltip) return;
 
         // Build tooltip content
@@ -141,10 +141,11 @@ class PortfolioChart {
       </div>
     `;
 
-        // Check for mobile mode
+        // Check for mobile mode OR forced center (legend click)
         const isMobile = window.innerWidth <= 600 || document.body.classList.contains('mobile-mode');
+        const shouldCenter = isMobile || forceCenter;
 
-        if (isMobile) {
+        if (shouldCenter) {
             this.tooltip.classList.add('mobile-center');
             // Remove inline styles for positioning
             this.tooltip.style.left = '';
@@ -170,18 +171,24 @@ class PortfolioChart {
 
         this.tooltip.classList.add('visible');
 
-        // Add click listener to close on mobile if not already added
-        if (isMobile && !this._hasCloseListener) {
-            const closeHandler = (e) => {
+        // Add click listener to close if centered (mobile or desktop legend click)
+        if (shouldCenter && !this._hasCloseListener) {
+            // Remove any existing listener first just in case
+            if (this._closeHandler) {
+                document.removeEventListener('click', this._closeHandler);
+            }
+
+            this._closeHandler = (e) => {
                 if (!this.tooltip.contains(e.target) && !e.target.closest('.legend-item')) {
                     this.hideTooltip();
-                    document.removeEventListener('click', closeHandler);
+                    document.removeEventListener('click', this._closeHandler);
                     this._hasCloseListener = false;
+                    this._closeHandler = null;
                 }
             };
             // Delay adding listener to avoid immediate closing from the trigger click
             setTimeout(() => {
-                document.addEventListener('click', closeHandler);
+                document.addEventListener('click', this._closeHandler);
                 this._hasCloseListener = true;
             }, 10);
         }
@@ -190,15 +197,8 @@ class PortfolioChart {
     showTooltipForCategory(category) {
         const segment = this.segments.find(s => s.category === category);
         if (segment) {
-            // For mobile, coordinates don't matter as it will be centered
-            // For desktop, we can default to center of screen or simply rely on mobile logic if triggered by legend
-            // We'll treat legend clicks as "mobile-like" behavior (centered) if on mobile, 
-            // but on desktop we might want it near the legend? 
-            // Simplest is to treat legend clicks as centering requests on mobile.
-            // On desktop, legend clicks might be weird if it spawns a floating tooltip. 
-            // Let's assume this is primarily for mobile per user request.
-
-            this.showTooltip(0, 0, segment);
+            // Force center for legend clicks on all devices
+            this.showTooltip(0, 0, segment, true);
         }
     }
 
