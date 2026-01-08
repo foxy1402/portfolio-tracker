@@ -141,38 +141,24 @@ class PortfolioChart {
       </div>
     `;
 
-        // Check for mobile mode OR forced center (legend click)
-        const isMobile = window.innerWidth <= 600 || document.body.classList.contains('mobile-mode');
-        const shouldCenter = isMobile || forceCenter;
+        // Always use centered mode as requested for both desktop and mobile
+        // This provides the "cool animation" consistently
 
-        if (shouldCenter) {
-            this.tooltip.classList.add('mobile-center');
-            // Remove inline styles for positioning
-            this.tooltip.style.left = '';
-            this.tooltip.style.top = '';
-        } else {
-            this.tooltip.classList.remove('mobile-center');
-            // Position tooltip
-            const tooltipRect = this.tooltip.getBoundingClientRect();
-            let left = x + 15;
-            let top = y + 15;
-
-            // Keep tooltip on screen
-            if (left + tooltipRect.width > window.innerWidth) {
-                left = x - tooltipRect.width - 15;
-            }
-            if (top + tooltipRect.height > window.innerHeight) {
-                top = y - tooltipRect.height - 15;
-            }
-
-            this.tooltip.style.left = left + 'px';
-            this.tooltip.style.top = top + 'px';
-        }
+        this.tooltip.classList.add('mobile-center');
+        // Remove inline styles for positioning
+        this.tooltip.style.left = '';
+        this.tooltip.style.top = '';
 
         this.tooltip.classList.add('visible');
 
-        // Add click listener to close if centered (mobile or desktop legend click)
-        if (shouldCenter && !this._hasCloseListener) {
+        // Add click listener to close if NOT hovering (e.g. triggered by legend click)
+        // If triggered by hover, handleMouseLeave will hide it.
+        // If triggered by legend click (forceCenter=true), we need click-outside to close.
+
+        // However, if we are in "hover mode", we rely on mouseleave.
+        // If we are in "click mode" (forceCenter), we rely on click-outside.
+
+        if (forceCenter && !this._hasCloseListener) {
             // Remove any existing listener first just in case
             if (this._closeHandler) {
                 document.removeEventListener('click', this._closeHandler);
