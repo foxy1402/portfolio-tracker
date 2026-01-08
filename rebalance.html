@@ -335,6 +335,222 @@
             color: var(--accent-crypto);
         }
 
+        /* Asset Selection Styles */
+        .category-section {
+            margin-bottom: var(--spacing-lg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+        }
+
+        .category-section.crypto {
+            border-color: var(--accent-crypto);
+        }
+
+        .category-section.stocks {
+            border-color: var(--accent-stocks);
+        }
+
+        .category-section.gold {
+            border-color: var(--accent-gold);
+        }
+
+        .category-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--spacing-md);
+            background: var(--bg-glass);
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .category-header:hover {
+            background: var(--bg-secondary);
+        }
+
+        .category-header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .category-header-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .category-header-title {
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .category-header-subtitle {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .category-header-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .category-target-input {
+            width: 80px;
+            padding: 8px 12px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-size: 1rem;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .category-target-input:focus {
+            outline: none;
+            border-color: var(--accent-crypto);
+        }
+
+        .expand-icon {
+            font-size: 1.2rem;
+            transition: transform 0.2s ease;
+        }
+
+        .category-section.expanded .expand-icon {
+            transform: rotate(180deg);
+        }
+
+        .asset-list {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .category-section.expanded .asset-list {
+            max-height: 1000px;
+        }
+
+        .asset-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--spacing-sm) var(--spacing-md);
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-color);
+        }
+
+        .asset-item-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+        }
+
+        .asset-checkbox {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            accent-color: var(--accent-crypto);
+        }
+
+        .asset-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .asset-icon.crypto {
+            background: linear-gradient(135deg, var(--accent-crypto), #8b5cf6);
+        }
+
+        .asset-icon.stocks {
+            background: linear-gradient(135deg, var(--accent-stocks), #10b981);
+        }
+
+        .asset-icon.gold {
+            background: linear-gradient(135deg, var(--accent-gold), #f59e0b);
+        }
+
+        .asset-icon img {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+        }
+
+        .asset-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .asset-name {
+            font-weight: 500;
+        }
+
+        .asset-value {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .asset-target-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .asset-target-input {
+            width: 60px;
+            padding: 6px 10px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            text-align: center;
+        }
+
+        .asset-target-input:focus {
+            outline: none;
+            border-color: var(--accent-crypto);
+        }
+
+        .asset-target-input:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .asset-target-label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .intra-category-total {
+            padding: var(--spacing-sm) var(--spacing-md);
+            background: var(--bg-primary);
+            border-top: 1px solid var(--border-color);
+            text-align: center;
+            font-size: 0.85rem;
+        }
+
+        .intra-category-total.valid {
+            color: var(--accent-stocks);
+        }
+
+        .intra-category-total.invalid {
+            color: #ff5050;
+        }
+
         .loading {
             text-align: center;
             padding: var(--spacing-lg);
@@ -396,34 +612,12 @@
             <div class="card fade-in" style="margin-top: var(--spacing-lg);">
                 <div class="card-title">🎯 Target Allocation</div>
                 <p style="color: var(--text-secondary); margin-bottom: var(--spacing-md); font-size: 0.9rem;">
-                    Enter your desired allocation percentages. They must add up to 100%.
+                    Set category targets (must add to 100%). Expand each category to select assets and set their
+                    intra-category allocation.
                 </p>
 
-                <div class="target-inputs">
-                    <div class="target-input-group">
-                        <label class="target-input-label">
-                            <span class="emoji">🪙</span> Crypto
-                        </label>
-                        <input type="number" class="target-input" id="targetCrypto" value="50" min="0" max="100"
-                            step="1">
-                        <span style="text-align: center; color: var(--text-muted);">%</span>
-                    </div>
-                    <div class="target-input-group">
-                        <label class="target-input-label">
-                            <span class="emoji">📈</span> Stocks
-                        </label>
-                        <input type="number" class="target-input" id="targetStocks" value="30" min="0" max="100"
-                            step="1">
-                        <span style="text-align: center; color: var(--text-muted);">%</span>
-                    </div>
-                    <div class="target-input-group">
-                        <label class="target-input-label">
-                            <span class="emoji">🥇</span> Gold
-                        </label>
-                        <input type="number" class="target-input" id="targetGold" value="20" min="0" max="100" step="1">
-                        <span style="text-align: center; color: var(--text-muted);">%</span>
-                    </div>
-                </div>
+                <!-- Category Sections with Assets -->
+                <div id="categorySelections"></div>
 
                 <div class="target-total" id="targetTotal">Total: 100%</div>
 
@@ -453,24 +647,72 @@
     <script>
         // Rebalance Calculator Logic
         let portfolioData = null;
+        let assetSelections = {}; // { assetId: { selected: bool, targetPercent: number } }
 
         async function initRebalance() {
             await loadPortfolio();
+            renderCategorySections();
             setupEventListeners();
-            validateTargets();
+            validateAll();
         }
 
         async function loadPortfolio() {
             try {
                 portfolioData = await PortfolioApp.calculatePortfolio();
                 renderCurrentAllocation();
+                initializeAssetSelections();
             } catch (error) {
                 console.error('Error loading portfolio:', error);
                 document.getElementById('currentAllocation').innerHTML = `
-          <div class="no-assets-message">
-            Error loading portfolio. <a href="index.html">Go to dashboard</a>
-          </div>
-        `;
+                    <div class="no-assets-message">
+                        Error loading portfolio. <a href="index.html">Go to dashboard</a>
+                    </div>
+                `;
+            }
+        }
+
+        function initializeAssetSelections() {
+            if (!portfolioData || !portfolioData.assets) return;
+
+            // Group assets by category to calculate default percentages
+            const categoryAssets = { crypto: [], stocks: [], gold: [] };
+            portfolioData.assets.forEach(asset => {
+                if (categoryAssets[asset.category]) {
+                    categoryAssets[asset.category].push(asset);
+                }
+            });
+
+            // Initialize each asset with equal distribution within category
+            portfolioData.assets.forEach(asset => {
+                const assetsInCategory = categoryAssets[asset.category]?.length || 1;
+                const equalPercent = Math.round(100 / assetsInCategory);
+                assetSelections[asset.id] = {
+                    selected: true,
+                    targetPercent: equalPercent
+                };
+            });
+
+            // Adjust to ensure exactly 100% per category
+            ['crypto', 'stocks', 'gold'].forEach(category => {
+                adjustCategoryTotal(category);
+            });
+        }
+
+        function adjustCategoryTotal(category) {
+            if (!portfolioData) return;
+
+            const categoryAssets = portfolioData.assets.filter(a => a.category === category);
+            const selectedAssets = categoryAssets.filter(a => assetSelections[a.id]?.selected);
+
+            if (selectedAssets.length === 0) return;
+
+            // Calculate current total
+            const currentTotal = selectedAssets.reduce((sum, a) => sum + (assetSelections[a.id]?.targetPercent || 0), 0);
+
+            // If not 100%, adjust the last selected asset
+            if (currentTotal !== 100 && selectedAssets.length > 0) {
+                const lastAsset = selectedAssets[selectedAssets.length - 1];
+                assetSelections[lastAsset.id].targetPercent += (100 - currentTotal);
             }
         }
 
@@ -480,11 +722,11 @@
 
             if (!portfolioData || portfolioData.grandTotal === 0) {
                 container.innerHTML = `
-          <div class="no-assets-message" style="grid-column: 1 / -1;">
-            <p>📭 No assets in your portfolio</p>
-            <p><a href="admin.html">Add assets first</a> to use the rebalance calculator</p>
-          </div>
-        `;
+                    <div class="no-assets-message" style="grid-column: 1 / -1;">
+                        <p>📭 No assets in your portfolio</p>
+                        <p><a href="admin.html">Add assets first</a> to use the rebalance calculator</p>
+                    </div>
+                `;
                 totalEl.textContent = 'Total Portfolio: $0';
                 return;
             }
@@ -492,49 +734,258 @@
             const { categories, grandTotal } = portfolioData;
 
             container.innerHTML = `
-        <div class="allocation-card crypto">
-          <div class="allocation-label">Crypto</div>
-          <div class="allocation-value crypto">${PortfolioApp.formatCurrency(categories.crypto.total)}</div>
-          <div class="allocation-percent">${categories.crypto.percentage.toFixed(1)}%</div>
-        </div>
-        <div class="allocation-card stocks">
-          <div class="allocation-label">Stocks</div>
-          <div class="allocation-value stocks">${PortfolioApp.formatCurrency(categories.stocks.total)}</div>
-          <div class="allocation-percent">${categories.stocks.percentage.toFixed(1)}%</div>
-        </div>
-        <div class="allocation-card gold">
-          <div class="allocation-label">Gold</div>
-          <div class="allocation-value gold">${PortfolioApp.formatCurrency(categories.gold.total)}</div>
-          <div class="allocation-percent">${categories.gold.percentage.toFixed(1)}%</div>
-        </div>
-      `;
+                <div class="allocation-card crypto">
+                    <div class="allocation-label">Crypto</div>
+                    <div class="allocation-value crypto">${PortfolioApp.formatCurrency(categories.crypto.total)}</div>
+                    <div class="allocation-percent">${categories.crypto.percentage.toFixed(1)}%</div>
+                </div>
+                <div class="allocation-card stocks">
+                    <div class="allocation-label">Stocks</div>
+                    <div class="allocation-value stocks">${PortfolioApp.formatCurrency(categories.stocks.total)}</div>
+                    <div class="allocation-percent">${categories.stocks.percentage.toFixed(1)}%</div>
+                </div>
+                <div class="allocation-card gold">
+                    <div class="allocation-label">Gold</div>
+                    <div class="allocation-value gold">${PortfolioApp.formatCurrency(categories.gold.total)}</div>
+                    <div class="allocation-percent">${categories.gold.percentage.toFixed(1)}%</div>
+                </div>
+            `;
 
             totalEl.textContent = `Total Portfolio: ${PortfolioApp.formatCurrency(grandTotal)}`;
         }
 
+        function renderCategorySections() {
+            const container = document.getElementById('categorySelections');
+            if (!portfolioData || !portfolioData.assets) {
+                container.innerHTML = '';
+                return;
+            }
+
+            const categoryConfig = {
+                crypto: { emoji: '🪙', name: 'Crypto', defaultTarget: 50 },
+                stocks: { emoji: '📈', name: 'Stocks', defaultTarget: 30 },
+                gold: { emoji: '🥇', name: 'Gold', defaultTarget: 20 }
+            };
+
+            let html = '';
+
+            ['crypto', 'stocks', 'gold'].forEach(category => {
+                const config = categoryConfig[category];
+                const categoryAssets = portfolioData.assets.filter(a => a.category === category);
+                const selectedCount = categoryAssets.filter(a => assetSelections[a.id]?.selected).length;
+                const totalCount = categoryAssets.length;
+
+                html += `
+                    <div class="category-section ${category}" id="section-${category}">
+                        <div class="category-header" onclick="toggleCategory('${category}')">
+                            <div class="category-header-left">
+                                <div class="category-header-info">
+                                    <div class="category-header-title">
+                                        <span>${config.emoji}</span>
+                                        <span>${config.name}</span>
+                                    </div>
+                                    <div class="category-header-subtitle">
+                                        ${selectedCount}/${totalCount} assets selected
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="category-header-right">
+                                <input type="number" class="category-target-input" id="target-${category}" 
+                                    value="${config.defaultTarget}" min="0" max="100" step="1" 
+                                    onclick="event.stopPropagation()">
+                                <span style="color: var(--text-muted);">%</span>
+                                <span class="expand-icon">▼</span>
+                            </div>
+                        </div>
+                        <div class="asset-list">
+                `;
+
+                if (categoryAssets.length === 0) {
+                    html += `
+                        <div class="asset-item">
+                            <em style="color: var(--text-muted);">No assets in this category</em>
+                        </div>
+                    `;
+                } else {
+                    categoryAssets.forEach(asset => {
+                        const selection = assetSelections[asset.id] || { selected: true, targetPercent: 0 };
+
+                        // Icon
+                        let iconHtml;
+                        if (asset.iconUrl) {
+                            iconHtml = `<img src="${asset.iconUrl}" alt="${asset.symbol}" onerror="this.style.display='none';this.parentElement.textContent='${asset.symbol ? asset.symbol.substring(0, 2) : '??'}';">`;
+                        } else {
+                            iconHtml = asset.symbol ? asset.symbol.substring(0, 2) : '??';
+                        }
+
+                        html += `
+                            <div class="asset-item" id="asset-item-${asset.id}">
+                                <div class="asset-item-left">
+                                    <input type="checkbox" class="asset-checkbox" id="check-${asset.id}" 
+                                        ${selection.selected ? 'checked' : ''} 
+                                        onchange="toggleAsset('${asset.id}', '${category}')">
+                                    <div class="asset-icon ${category}">${iconHtml}</div>
+                                    <div class="asset-info">
+                                        <div class="asset-name">${asset.name}</div>
+                                        <div class="asset-value">${PortfolioApp.formatCurrency(asset.value)}</div>
+                                    </div>
+                                </div>
+                                <div class="asset-target-group">
+                                    <input type="number" class="asset-target-input" id="target-asset-${asset.id}" 
+                                        value="${selection.targetPercent}" min="0" max="100" step="1"
+                                        ${!selection.selected ? 'disabled' : ''}
+                                        onchange="updateAssetTarget('${asset.id}', '${category}')">
+                                    <span class="asset-target-label">%</span>
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+
+                // Intra-category total
+                const intraCategoryTotal = categoryAssets.reduce((sum, a) => {
+                    if (assetSelections[a.id]?.selected) {
+                        return sum + (assetSelections[a.id]?.targetPercent || 0);
+                    }
+                    return sum;
+                }, 0);
+
+                html += `
+                        <div class="intra-category-total ${intraCategoryTotal === 100 ? 'valid' : 'invalid'}" id="intra-total-${category}">
+                            Asset allocation: ${intraCategoryTotal}% ${intraCategoryTotal === 100 ? '✓' : '(must be 100%)'}
+                        </div>
+                    </div>
+                </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function toggleCategory(category) {
+            const section = document.getElementById(`section-${category}`);
+            section.classList.toggle('expanded');
+        }
+
+        function toggleAsset(assetId, category) {
+            const checkbox = document.getElementById(`check-${assetId}`);
+            const targetInput = document.getElementById(`target-asset-${assetId}`);
+
+            assetSelections[assetId].selected = checkbox.checked;
+            targetInput.disabled = !checkbox.checked;
+
+            if (!checkbox.checked) {
+                assetSelections[assetId].targetPercent = 0;
+                targetInput.value = 0;
+            } else {
+                // Redistribute percentages among selected assets
+                redistributePercentages(category);
+            }
+
+            updateIntraCategoryTotal(category);
+            updateCategorySubtitle(category);
+            validateAll();
+        }
+
+        function updateAssetTarget(assetId, category) {
+            const input = document.getElementById(`target-asset-${assetId}`);
+            const value = parseFloat(input.value) || 0;
+            assetSelections[assetId].targetPercent = Math.min(100, Math.max(0, value));
+            input.value = assetSelections[assetId].targetPercent;
+
+            updateIntraCategoryTotal(category);
+            validateAll();
+        }
+
+        function redistributePercentages(category) {
+            const categoryAssets = portfolioData.assets.filter(a => a.category === category);
+            const selectedAssets = categoryAssets.filter(a => assetSelections[a.id]?.selected);
+
+            if (selectedAssets.length === 0) return;
+
+            const equalPercent = Math.floor(100 / selectedAssets.length);
+            const remainder = 100 - (equalPercent * selectedAssets.length);
+
+            selectedAssets.forEach((asset, index) => {
+                const extra = index < remainder ? 1 : 0;
+                assetSelections[asset.id].targetPercent = equalPercent + extra;
+                const input = document.getElementById(`target-asset-${asset.id}`);
+                if (input) input.value = assetSelections[asset.id].targetPercent;
+            });
+        }
+
+        function updateIntraCategoryTotal(category) {
+            const categoryAssets = portfolioData.assets.filter(a => a.category === category);
+            const total = categoryAssets.reduce((sum, a) => {
+                if (assetSelections[a.id]?.selected) {
+                    return sum + (assetSelections[a.id]?.targetPercent || 0);
+                }
+                return sum;
+            }, 0);
+
+            const totalEl = document.getElementById(`intra-total-${category}`);
+            if (totalEl) {
+                totalEl.textContent = `Asset allocation: ${total}% ${total === 100 ? '✓' : '(must be 100%)'}`;
+                totalEl.className = `intra-category-total ${total === 100 ? 'valid' : 'invalid'}`;
+            }
+        }
+
+        function updateCategorySubtitle(category) {
+            const categoryAssets = portfolioData.assets.filter(a => a.category === category);
+            const selectedCount = categoryAssets.filter(a => assetSelections[a.id]?.selected).length;
+            const totalCount = categoryAssets.length;
+
+            const section = document.getElementById(`section-${category}`);
+            const subtitle = section?.querySelector('.category-header-subtitle');
+            if (subtitle) {
+                subtitle.textContent = `${selectedCount}/${totalCount} assets selected`;
+            }
+        }
+
         function setupEventListeners() {
-            // Target input validation
-            const inputs = ['targetCrypto', 'targetStocks', 'targetGold'];
-            inputs.forEach(id => {
-                document.getElementById(id).addEventListener('input', validateTargets);
+            // Category target inputs
+            ['crypto', 'stocks', 'gold'].forEach(category => {
+                const input = document.getElementById(`target-${category}`);
+                if (input) {
+                    input.addEventListener('input', validateAll);
+                }
             });
 
             // Calculate button
             document.getElementById('calculateBtn').addEventListener('click', calculateRebalance);
         }
 
-        function validateTargets() {
-            const crypto = parseFloat(document.getElementById('targetCrypto').value) || 0;
-            const stocks = parseFloat(document.getElementById('targetStocks').value) || 0;
-            const gold = parseFloat(document.getElementById('targetGold').value) || 0;
+        function validateAll() {
+            const crypto = parseFloat(document.getElementById('target-crypto')?.value) || 0;
+            const stocks = parseFloat(document.getElementById('target-stocks')?.value) || 0;
+            const gold = parseFloat(document.getElementById('target-gold')?.value) || 0;
 
-            const total = crypto + stocks + gold;
+            const categoryTotal = crypto + stocks + gold;
             const totalEl = document.getElementById('targetTotal');
             const calcBtn = document.getElementById('calculateBtn');
 
-            totalEl.textContent = `Total: ${total}%`;
+            totalEl.textContent = `Total: ${categoryTotal}%`;
 
-            if (total === 100) {
+            // Check category totals
+            const categoryValid = categoryTotal === 100;
+
+            // Check intra-category totals
+            let intraValid = true;
+            ['crypto', 'stocks', 'gold'].forEach(category => {
+                const categoryAssets = portfolioData?.assets?.filter(a => a.category === category) || [];
+                const selectedAssets = categoryAssets.filter(a => assetSelections[a.id]?.selected);
+
+                if (selectedAssets.length > 0) {
+                    const intraTotal = selectedAssets.reduce((sum, a) => sum + (assetSelections[a.id]?.targetPercent || 0), 0);
+                    if (intraTotal !== 100) {
+                        intraValid = false;
+                    }
+                }
+            });
+
+            const allValid = categoryValid && intraValid;
+
+            if (allValid) {
                 totalEl.className = 'target-total valid';
                 calcBtn.disabled = false;
             } else {
@@ -542,17 +993,17 @@
                 calcBtn.disabled = true;
             }
 
-            return total === 100;
+            return allValid;
         }
 
         function calculateRebalance() {
-            if (!validateTargets() || !portfolioData || portfolioData.grandTotal === 0) {
+            if (!validateAll() || !portfolioData || portfolioData.grandTotal === 0) {
                 return;
             }
 
-            const targetCrypto = parseFloat(document.getElementById('targetCrypto').value) / 100;
-            const targetStocks = parseFloat(document.getElementById('targetStocks').value) / 100;
-            const targetGold = parseFloat(document.getElementById('targetGold').value) / 100;
+            const targetCrypto = parseFloat(document.getElementById('target-crypto').value) / 100;
+            const targetStocks = parseFloat(document.getElementById('target-stocks').value) / 100;
+            const targetGold = parseFloat(document.getElementById('target-gold').value) / 100;
 
             const { categories, grandTotal, assets } = portfolioData;
 
@@ -570,40 +1021,51 @@
                 gold: targets.gold - categories.gold.total
             };
 
-            // Calculate per-asset recommendations
-            const assetRecommendations = calculateAssetRecommendations(assets, categories, diffs);
+            // Calculate per-asset recommendations using intra-category targets
+            const assetRecommendations = calculateAssetRecommendations(assets, targets, diffs);
 
             // Render results
             renderResults(diffs, assetRecommendations, targets);
         }
 
-        function calculateAssetRecommendations(assets, categories, diffs) {
+        function calculateAssetRecommendations(assets, targets, diffs) {
             const recommendations = [];
 
-            // For each category, distribute the change proportionally among assets
             ['crypto', 'stocks', 'gold'].forEach(category => {
                 const categoryAssets = assets.filter(a => a.category === category);
-                const categoryTotal = categories[category].total;
-                const categoryDiff = diffs[category];
-
-                if (categoryAssets.length === 0) return;
+                const categoryTarget = targets[category];
 
                 categoryAssets.forEach(asset => {
-                    // Calculate this asset's proportion within its category
-                    const proportion = categoryTotal > 0 ? asset.value / categoryTotal : 1 / categoryAssets.length;
+                    const selection = assetSelections[asset.id];
+                    const isSelected = selection?.selected;
+                    const targetPercent = (selection?.targetPercent || 0) / 100;
 
-                    // This asset's share of the category change
-                    const usdChange = categoryDiff * proportion;
+                    if (!isSelected) {
+                        // Asset not selected - recommend selling all
+                        const usdChange = -asset.value;
+                        const amountChange = -asset.balance;
+                        recommendations.push({
+                            ...asset,
+                            usdChange,
+                            amountChange,
+                            action: asset.value > 1 ? 'sell' : 'hold',
+                            excluded: true
+                        });
+                    } else {
+                        // Calculate target value for this asset based on intra-category percentage
+                        const assetTargetValue = categoryTarget * targetPercent;
+                        const usdChange = assetTargetValue - asset.value;
+                        const amountChange = asset.currentPrice > 0 ? usdChange / asset.currentPrice : 0;
 
-                    // Calculate amount change based on current price
-                    const amountChange = asset.currentPrice > 0 ? usdChange / asset.currentPrice : 0;
-
-                    recommendations.push({
-                        ...asset,
-                        usdChange,
-                        amountChange,
-                        action: usdChange > 1 ? 'buy' : usdChange < -1 ? 'sell' : 'hold'
-                    });
+                        recommendations.push({
+                            ...asset,
+                            usdChange,
+                            amountChange,
+                            targetValue: assetTargetValue,
+                            targetPercent: targetPercent * 100,
+                            action: usdChange > 1 ? 'buy' : usdChange < -1 ? 'sell' : 'hold'
+                        });
+                    }
                 });
             });
 
@@ -622,7 +1084,6 @@
 
             let html = '';
 
-            // Group recommendations by category
             ['crypto', 'stocks', 'gold'].forEach(category => {
                 const catAssets = assetRecommendations.filter(a => a.category === category);
                 const catDiff = diffs[category];
@@ -636,15 +1097,15 @@
                         : 'No change needed';
 
                 html += `
-          <div class="result-category">
-            <div class="result-category-header">
-              <div class="result-category-title">
-                <span>${emoji}</span>
-                <span>${name}</span>
-              </div>
-              <div class="result-category-action ${action}">${actionText}</div>
-            </div>
-        `;
+                    <div class="result-category">
+                        <div class="result-category-header">
+                            <div class="result-category-title">
+                                <span>${emoji}</span>
+                                <span>${name}</span>
+                            </div>
+                            <div class="result-category-action ${action}">${actionText}</div>
+                        </div>
+                `;
 
                 if (catAssets.length === 0) {
                     html += `<div class="asset-result"><em style="color: var(--text-muted);">No assets in this category</em></div>`;
@@ -657,9 +1118,14 @@
                                 ? `Sell ${PortfolioApp.formatCurrency(Math.abs(asset.usdChange))}`
                                 : 'Hold';
 
-                        const amountText = asset.amountChange !== 0
+                        const amountText = Math.abs(asset.amountChange) > 0.000001
                             ? `${asset.action === 'buy' ? '+' : ''}${asset.amountChange.toFixed(6)} ${asset.symbol || 'units'}`
                             : '';
+
+                        // Target info
+                        const targetInfo = asset.targetPercent !== undefined
+                            ? `Target: ${asset.targetPercent.toFixed(0)}% → ${PortfolioApp.formatCurrency(asset.targetValue)}`
+                            : asset.excluded ? 'Not included' : '';
 
                         // Icon
                         let iconHtml;
@@ -670,22 +1136,23 @@
                         }
 
                         html += `
-              <div class="asset-result">
-                <div class="asset-result-info">
-                  <div class="asset-result-icon ${category}">${iconHtml}</div>
-                  <div>
-                    <div class="asset-result-name">${asset.name}</div>
-                    <div class="asset-result-details">
-                      Current: ${asset.balance} ${asset.symbol || ''} (${PortfolioApp.formatCurrency(asset.value)})
-                    </div>
-                  </div>
-                </div>
-                <div class="asset-result-action">
-                  <div class="action-badge ${actionClass}">${actionLabel}</div>
-                  ${amountText ? `<div class="action-amount">${amountText}</div>` : ''}
-                </div>
-              </div>
-            `;
+                            <div class="asset-result ${asset.excluded ? 'excluded' : ''}">
+                                <div class="asset-result-info">
+                                    <div class="asset-result-icon ${category}">${iconHtml}</div>
+                                    <div>
+                                        <div class="asset-result-name">${asset.name} ${asset.excluded ? '<span style="color: var(--text-muted);">(excluded)</span>' : ''}</div>
+                                        <div class="asset-result-details">
+                                            Current: ${asset.balance} ${asset.symbol || ''} (${PortfolioApp.formatCurrency(asset.value)})
+                                            ${targetInfo ? `<br>${targetInfo}` : ''}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="asset-result-action">
+                                    <div class="action-badge ${actionClass}">${actionLabel}</div>
+                                    ${amountText ? `<div class="action-amount">${amountText}</div>` : ''}
+                                </div>
+                            </div>
+                        `;
                     });
                 }
 
@@ -695,39 +1162,37 @@
             resultsContent.innerHTML = html;
 
             // Render summary
-            const totalToBuy = Object.values(diffs).filter(d => d > 0).reduce((sum, d) => sum + d, 0);
-            const totalToSell = Math.abs(Object.values(diffs).filter(d => d < 0).reduce((sum, d) => sum + d, 0));
+            const totalToBuy = assetRecommendations.filter(a => a.usdChange > 0).reduce((sum, a) => sum + a.usdChange, 0);
+            const totalToSell = Math.abs(assetRecommendations.filter(a => a.usdChange < 0).reduce((sum, a) => sum + a.usdChange, 0));
 
             document.getElementById('summaryGrid').innerHTML = `
-        <div class="summary-item">
-          <div class="summary-item-label">Total to Buy</div>
-          <div class="summary-item-value positive">${PortfolioApp.formatCurrency(totalToBuy)}</div>
-        </div>
-        <div class="summary-item">
-          <div class="summary-item-label">Total to Sell</div>
-          <div class="summary-item-value negative">${PortfolioApp.formatCurrency(totalToSell)}</div>
-        </div>
-        <div class="summary-item">
-          <div class="summary-item-label">Target Crypto</div>
-          <div class="summary-item-value">${PortfolioApp.formatCurrency(targets.crypto)}</div>
-        </div>
-        <div class="summary-item">
-          <div class="summary-item-label">Target Stocks</div>
-          <div class="summary-item-value">${PortfolioApp.formatCurrency(targets.stocks)}</div>
-        </div>
-        <div class="summary-item">
-          <div class="summary-item-label">Target Gold</div>
-          <div class="summary-item-value">${PortfolioApp.formatCurrency(targets.gold)}</div>
-        </div>
-        <div class="summary-item">
-          <div class="summary-item-label">Portfolio Total</div>
-          <div class="summary-item-value">${PortfolioApp.formatCurrency(portfolioData.grandTotal)}</div>
-        </div>
-      `;
+                <div class="summary-item">
+                    <div class="summary-item-label">Total to Buy</div>
+                    <div class="summary-item-value positive">${PortfolioApp.formatCurrency(totalToBuy)}</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-item-label">Total to Sell</div>
+                    <div class="summary-item-value negative">${PortfolioApp.formatCurrency(totalToSell)}</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-item-label">Target Crypto</div>
+                    <div class="summary-item-value">${PortfolioApp.formatCurrency(targets.crypto)}</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-item-label">Target Stocks</div>
+                    <div class="summary-item-value">${PortfolioApp.formatCurrency(targets.stocks)}</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-item-label">Target Gold</div>
+                    <div class="summary-item-value">${PortfolioApp.formatCurrency(targets.gold)}</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-item-label">Portfolio Total</div>
+                    <div class="summary-item-value">${PortfolioApp.formatCurrency(portfolioData.grandTotal)}</div>
+                </div>
+            `;
 
             resultsSection.style.display = 'block';
-
-            // Scroll to results
             resultsSection.scrollIntoView({ behavior: 'smooth' });
         }
 
