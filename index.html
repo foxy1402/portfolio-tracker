@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Track your crypto, stocks, and gold portfolio with real-time prices">
+  <title>Portfolio Tracker | Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .profit {
+      color: #00d4aa;
+    }
+
+    .loss {
+      color: #ff5050;
+    }
+
+    .profit-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    .profit-badge.positive {
+      background: rgba(0, 212, 170, 0.15);
+      color: #00d4aa;
+    }
+
+    .profit-badge.negative {
+      background: rgba(255, 80, 80, 0.15);
+      color: #ff5050;
+    }
+
+    .asset-icon-img {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+
+    .total-profit {
+      text-align: center;
+      margin-top: var(--spacing-sm);
+      padding-top: var(--spacing-sm);
+      border-top: 1px solid var(--border-color);
+    }
+
+    .total-profit-label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .total-profit-value {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    /* Mobile-optimized asset item */
+    .asset-item {
+      flex-wrap: wrap;
+    }
+
+    .asset-value {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .asset-pnl {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    /* Mobile responsive */
+    @media (max-width: 480px) {
+      .asset-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+      }
+
+      .asset-value {
+        width: 100%;
+        align-items: flex-start;
+        padding-left: 48px;
+      }
+
+      .asset-pnl {
+        justify-content: flex-start;
+      }
+
+      .stat-card {
+        padding: var(--spacing-sm);
+      }
+
+      .stat-value {
+        font-size: 1.2rem;
+      }
+
+      .chart-wrapper {
+        width: 260px;
+        height: 260px;
+      }
+
+      .chart-total-value {
+        font-size: 1.4rem;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo">
+        <div class="logo-icon">📊</div>
+        Portfolio Tracker
+      </div>
+      <nav>
+        <a href="admin.html" class="nav-link">
+          ⚙️ Manage Assets
+        </a>
+      </nav>
+    </header>
+
+    <!-- Main Dashboard -->
+    <main>
+      <!-- Stats Overview -->
+      <div class="stats-grid fade-in" id="statsGrid">
+        <div class="stat-card crypto">
+          <div class="stat-label">Crypto</div>
+          <div class="stat-value" id="cryptoValue">$0</div>
+          <div class="stat-percent" id="cryptoPercent">0%</div>
+          <div class="stat-profit" id="cryptoProfit"></div>
+        </div>
+        <div class="stat-card stocks">
+          <div class="stat-label">USA Stocks</div>
+          <div class="stat-value" id="stocksValue">$0</div>
+          <div class="stat-percent" id="stocksPercent">0%</div>
+          <div class="stat-profit" id="stocksProfit"></div>
+        </div>
+        <div class="stat-card gold">
+          <div class="stat-label">Gold</div>
+          <div class="stat-value" id="goldValue">$0</div>
+          <div class="stat-percent" id="goldPercent">0%</div>
+          <div class="stat-profit" id="goldProfit"></div>
+        </div>
+      </div>
+
+      <!-- Chart and Assets Grid -->
+      <div class="dashboard-grid">
+        <!-- Chart Card -->
+        <div class="card fade-in">
+          <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+            Portfolio Distribution
+            <button class="refresh-btn" id="refreshBtn" title="Refresh Prices">🔄</button>
+          </div>
+          <div class="chart-container">
+            <div class="chart-wrapper">
+              <canvas id="portfolioChart"></canvas>
+              <div class="chart-center">
+                <div class="chart-total-label">Total Value</div>
+                <div class="chart-total-value" id="totalValue">$0</div>
+              </div>
+            </div>
+            <div class="legend">
+              <div class="legend-item" data-category="crypto">
+                <span class="legend-color crypto"></span>
+                <span class="legend-label">Crypto</span>
+              </div>
+              <div class="legend-item" data-category="stocks">
+                <span class="legend-color stocks"></span>
+                <span class="legend-label">Stocks</span>
+              </div>
+              <div class="legend-item" data-category="gold">
+                <span class="legend-color gold"></span>
+                <span class="legend-label">Gold</span>
+              </div>
+            </div>
+            <!-- Total Profit/Loss -->
+            <div class="total-profit" id="totalProfitContainer" style="display: none;">
+              <div class="total-profit-label">Total P/L</div>
+              <div class="total-profit-value" id="totalProfitValue">$0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Assets List Card -->
+        <div class="card fade-in">
+          <div class="card-title">Your Assets</div>
+          <div class="assets-list" id="assetsList">
+            <div class="empty-state">
+              <div class="empty-state-icon">📭</div>
+              <p>No assets yet</p>
+              <p style="font-size: 0.9rem; margin-top: 0.5rem;">
+                <a href="admin.html" style="color: var(--accent-crypto);">Add your first asset</a>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Tooltip -->
+  <div class="chart-tooltip" id="chartTooltip"></div>
+
+  <!-- Scripts -->
+  <script src="js/app.js"></script>
+  <script src="js/chart.js"></script>
+  <script>
+    // Dashboard Logic
+    let chart;
+    let isRefreshing = false;
+
+    async function initDashboard() {
+      // Initialize chart
+      chart = new PortfolioChart('portfolioChart', 'chartTooltip');
+
+      // Load and display data
+      await refreshData();
+    }
+
+    async function refreshData() {
+      if (isRefreshing) return;
+
+      const refreshBtn = document.getElementById('refreshBtn');
+      isRefreshing = true;
+      refreshBtn.classList.add('spinning');
+
+      try {
+        const data = await PortfolioApp.calculatePortfolio();
+        updateUI(data);
+        chart.update(data);
+      } catch (error) {
+        console.error('Error refreshing data:', error);
+      } finally {
+        isRefreshing = false;
+        refreshBtn.classList.remove('spinning');
+      }
+    }
+
+    function updateUI(data) {
+      // Update total value - use compact format for large numbers
+      document.getElementById('totalValue').textContent =
+        PortfolioApp.formatCurrencyCompact(data.grandTotal);
+
+      // Update category stats
+      const categories = ['crypto', 'stocks', 'gold'];
+      categories.forEach(cat => {
+        const catData = data.categories[cat];
+        document.getElementById(`${cat}Value`).textContent =
+          PortfolioApp.formatCurrency(catData.total);
+        document.getElementById(`${cat}Percent`).textContent =
+          PortfolioApp.formatPercent(catData.percentage);
+
+        // Show profit/loss per category
+        const profitEl = document.getElementById(`${cat}Profit`);
+        if (catData.costBasis > 0) {
+          const isPositive = catData.profitLoss >= 0;
+          const sign = isPositive ? '+' : '';
+          profitEl.innerHTML = `
+            <span class="profit-badge ${isPositive ? 'positive' : 'negative'}">
+              ${sign}${PortfolioApp.formatPercent(catData.profitLossPercent)}
+            </span>
+          `;
+        } else {
+          profitEl.innerHTML = '';
+        }
+      });
+
+      // Update total profit/loss
+      const profitContainer = document.getElementById('totalProfitContainer');
+      const profitValue = document.getElementById('totalProfitValue');
+
+      if (data.totalCostBasis > 0) {
+        profitContainer.style.display = 'block';
+        const isPositive = data.totalProfitLoss >= 0;
+        const sign = isPositive ? '+' : '';
+        profitValue.className = `total-profit-value ${isPositive ? 'profit' : 'loss'}`;
+        profitValue.textContent = `${sign}${PortfolioApp.formatCurrency(data.totalProfitLoss)} (${sign}${PortfolioApp.formatPercent(data.totalProfitLossPercent)})`;
+      } else {
+        profitContainer.style.display = 'none';
+      }
+
+      // Update assets list
+      updateAssetsList(data.assets);
+    }
+
+    function updateAssetsList(assets) {
+      const container = document.getElementById('assetsList');
+
+      if (assets.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">📭</div>
+            <p>No assets yet</p>
+            <p style="font-size: 0.9rem; margin-top: 0.5rem;">
+              <a href="admin.html" style="color: var(--accent-crypto);">Add your first asset</a>
+            </p>
+          </div>
+        `;
+        return;
+      }
+
+      // Sort by value descending
+      const sorted = [...assets].sort((a, b) => b.value - a.value);
+
+      container.innerHTML = sorted.map(asset => {
+        // Build P/L display: % then USD (order: value → % → USD)
+        let pnlHtml = '';
+        if (asset.costBasis > 0) {
+          const isPositive = asset.profitLoss >= 0;
+          const sign = isPositive ? '+' : '';
+          const pnlClass = isPositive ? 'positive' : 'negative';
+          pnlHtml = `
+            <div class="asset-pnl">
+              <span class="profit-badge ${pnlClass}">${sign}${PortfolioApp.formatPercent(asset.profitLossPercent)}</span>
+              <span class="profit-badge ${pnlClass}">${sign}${PortfolioApp.formatCurrency(asset.profitLoss)}</span>
+            </div>
+          `;
+        }
+
+        // Build icon - use fetched/manual icon URL or fallback to symbol
+        let iconHtml;
+        if (asset.iconUrl) {
+          iconHtml = `<img src="${asset.iconUrl}" alt="${asset.symbol}" class="asset-icon-img" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+                      <div class="asset-icon ${asset.category}" style="display:none;">${asset.symbol ? asset.symbol.substring(0, 2).toUpperCase() : '??'}</div>`;
+        } else {
+          iconHtml = `<div class="asset-icon ${asset.category}">${asset.symbol ? asset.symbol.substring(0, 2).toUpperCase() : '??'}</div>`;
+        }
+
+        return `
+          <div class="asset-item">
+            <div class="asset-info">
+              ${iconHtml}
+              <div>
+                <div class="asset-name">${asset.name}</div>
+                <div class="asset-symbol">${asset.symbol || ''} • ${getCategoryLabel(asset.category)}</div>
+              </div>
+            </div>
+            <div class="asset-value">
+              <div class="asset-price">${PortfolioApp.formatCurrency(asset.value)}</div>
+              ${pnlHtml}
+              <div class="asset-balance">${asset.balance} @ ${PortfolioApp.formatCurrency(asset.currentPrice)}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function getCategoryLabel(category) {
+      const labels = {
+        crypto: 'Crypto',
+        stocks: 'Stocks',
+        gold: 'Gold'
+      };
+      return labels[category] || category;
+    }
+
+    // Event listeners
+    document.getElementById('refreshBtn').addEventListener('click', refreshData);
+
+    // Initialize on load
+    document.addEventListener('DOMContentLoaded', initDashboard);
+  </script>
+</body>
+
+</html>

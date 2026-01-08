@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Manage your portfolio assets">
+    <title>Portfolio Tracker | Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        /* Auth Modal Styles */
+        .auth-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            backdrop-filter: blur(10px);
+        }
+
+        .auth-modal {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-xl);
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .auth-modal h2 {
+            margin-bottom: var(--spacing-md);
+            text-align: center;
+        }
+
+        .auth-modal .form-hint {
+            margin-bottom: var(--spacing-md);
+        }
+
+        .sync-bar {
+            display: flex;
+            gap: var(--spacing-sm);
+            margin-bottom: var(--spacing-lg);
+            padding: var(--spacing-md);
+            background: var(--bg-glass);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .sync-status {
+            flex: 1;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .sync-status.success {
+            color: var(--accent-stocks);
+        }
+
+        .sync-status.error {
+            color: #ff5050;
+        }
+
+        .user-badge {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+            padding: var(--spacing-xs) var(--spacing-sm);
+            background: rgba(0, 212, 170, 0.1);
+            border: 1px solid var(--accent-stocks);
+            border-radius: var(--radius-sm);
+            font-size: 0.85rem;
+            color: var(--accent-stocks);
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Auth Modal -->
+    <div class="auth-overlay" id="authOverlay">
+        <div class="auth-modal">
+            <h2>🔐 Admin Login</h2>
+            <p class="form-hint">
+                Enter your GitHub Personal Access Token to sync data across devices.
+                Token is only stored in memory and cleared when you close the tab.
+            </p>
+            <form id="authForm">
+                <div class="form-group">
+                    <label class="form-label" for="authToken">GitHub Token</label>
+                    <input type="password" class="form-input" id="authToken" placeholder="ghp_xxxxxxxxxxxx" required>
+                    <div class="form-hint">
+                        <a href="https://github.com/settings/tokens/new?scopes=gist&description=Portfolio%20Tracker"
+                            target="_blank" style="color: var(--accent-crypto);">
+                            Create a token with 'gist' scope →
+                        </a>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">
+                    🔓 Login
+                </button>
+                <div id="authError" style="color: #ff5050; margin-top: 1rem; display: none;"></div>
+            </form>
+            <div style="margin-top: var(--spacing-md); text-align: center;">
+                <button class="btn btn-secondary" id="skipAuthBtn">
+                    Skip (Local Only)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <div class="logo-icon">📊</div>
+                Portfolio Tracker
+            </div>
+            <nav>
+                <a href="index.html" class="nav-link">
+                    ← Back to Dashboard
+                </a>
+            </nav>
+        </header>
+
+        <!-- Sync Bar -->
+        <div class="sync-bar" id="syncBar" style="display: none;">
+            <div class="user-badge" id="userBadge">
+                👤 <span id="username">-</span>
+            </div>
+            <div class="sync-status" id="syncStatus">Ready to sync</div>
+            <button class="btn btn-secondary" id="syncDownBtn" title="Download from cloud">
+                ⬇️ Pull
+            </button>
+            <button class="btn btn-primary" id="syncUpBtn" title="Upload to cloud">
+                ⬆️ Push
+            </button>
+            <button class="btn btn-secondary" id="logoutBtn" title="Logout">
+                🚪
+            </button>
+        </div>
+
+        <!-- Admin Content -->
+        <main>
+            <div class="admin-grid">
+                <!-- Add Asset Form -->
+                <div class="card fade-in">
+                    <div class="card-title" id="formTitle">Add New Asset</div>
+
+                    <form id="assetForm">
+                        <input type="hidden" id="editingId" value="">
+
+                        <!-- Category Selector -->
+                        <div class="form-group">
+                            <label class="form-label">Category</label>
+                            <div class="category-selector">
+                                <button type="button" class="category-btn crypto active" data-category="crypto">
+                                    🪙 Crypto
+                                </button>
+                                <button type="button" class="category-btn stocks" data-category="stocks">
+                                    📈 Stocks
+                                </button>
+                                <button type="button" class="category-btn gold" data-category="gold">
+                                    🥇 Gold
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Asset Name -->
+                        <div class="form-group">
+                            <label class="form-label" for="assetName">Asset Name</label>
+                            <input type="text" class="form-input" id="assetName"
+                                placeholder="e.g., Bitcoin, Tesla Stock, PAX Gold" required>
+                        </div>
+
+                        <!-- Symbol -->
+                        <div class="form-group">
+                            <label class="form-label" for="assetSymbol">Symbol</label>
+                            <input type="text" class="form-input" id="assetSymbol" placeholder="e.g., BTC, TSLA, PAXG">
+                        </div>
+
+                        <!-- CoinGecko ID -->
+                        <div class="form-group">
+                            <label class="form-label" for="coingeckoId">
+                                CoinGecko ID
+                                <span style="color: var(--text-muted); font-weight: normal;">(for auto price)</span>
+                            </label>
+                            <input type="text" class="form-input" id="coingeckoId"
+                                placeholder="e.g., bitcoin, pax-gold, tether-gold">
+                            <div class="form-hint">
+                                Find IDs at <a href="https://www.coingecko.com" target="_blank"
+                                    style="color: var(--accent-crypto);">coingecko.com</a>
+                                (URL: coingecko.com/en/coins/<strong>bitcoin</strong>)
+                            </div>
+                        </div>
+
+                        <!-- Manual Price (alternative to CoinGecko) -->
+                        <div class="form-group">
+                            <label class="form-label" for="manualPrice">
+                                Manual Price (USD)
+                                <span style="color: var(--text-muted); font-weight: normal;">(overrides API)</span>
+                            </label>
+                            <input type="number" class="form-input" id="manualPrice"
+                                placeholder="Leave empty to use CoinGecko" step="0.01" min="0">
+                        </div>
+
+                        <!-- Buy/Average Price for ROI -->
+                        <div class="form-group">
+                            <label class="form-label" for="buyPrice">
+                                Buy/Avg Price (USD)
+                                <span style="color: var(--text-muted); font-weight: normal;">(for ROI tracking)</span>
+                            </label>
+                            <input type="number" class="form-input" id="buyPrice"
+                                placeholder="Your average purchase price" step="0.01" min="0">
+                        </div>
+
+                        <!-- Balance -->
+                        <div class="form-group">
+                            <label class="form-label" for="assetBalance">Balance (Amount Held)</label>
+                            <input type="number" class="form-input" id="assetBalance" placeholder="e.g., 0.5, 10, 100"
+                                step="any" min="0" required>
+                        </div>
+
+                        <!-- Icon URL (manual override) -->
+                        <div class="form-group">
+                            <label class="form-label" for="iconUrl">
+                                Icon URL
+                                <span style="color: var(--text-muted); font-weight: normal;">(optional, auto-fetched
+                                    with CoinGecko ID)</span>
+                            </label>
+                            <input type="url" class="form-input" id="iconUrl"
+                                placeholder="https://... (paste image URL)">
+                            <div class="form-hint">
+                                Leave empty to auto-fetch from CoinGecko, or paste a custom icon URL
+                            </div>
+                        </div>
+
+                        <!-- Submit Buttons -->
+                        <div style="display: flex; gap: 1rem;">
+                            <button type="submit" class="btn btn-primary btn-block">
+                                💾 Save Asset
+                            </button>
+                            <button type="button" class="btn btn-secondary" id="cancelBtn" style="display: none;">
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Assets List -->
+                <div class="card fade-in">
+                    <div class="card-title">Your Assets</div>
+
+                    <div id="adminAssetsList">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📭</div>
+                            <p>No assets added yet</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Popular Assets Reference -->
+            <div class="card fade-in" style="margin-top: var(--spacing-lg);">
+                <div class="card-title">Popular CoinGecko IDs Reference</div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem;">
+                    <div>
+                        <strong style="color: var(--accent-crypto);">Crypto:</strong>
+                        <ul
+                            style="list-style: none; color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.5rem;">
+                            <li>Bitcoin → <code style="color: var(--text-primary);">bitcoin</code></li>
+                            <li>Ethereum → <code style="color: var(--text-primary);">ethereum</code></li>
+                            <li>Solana → <code style="color: var(--text-primary);">solana</code></li>
+                            <li>BNB → <code style="color: var(--text-primary);">binancecoin</code></li>
+                        </ul>
+                    </div>
+                    <div>
+                        <strong style="color: var(--accent-gold);">Tokenized Gold:</strong>
+                        <ul
+                            style="list-style: none; color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.5rem;">
+                            <li>PAX Gold → <code style="color: var(--text-primary);">pax-gold</code></li>
+                            <li>Tether Gold → <code style="color: var(--text-primary);">tether-gold</code></li>
+                        </ul>
+                    </div>
+                    <div>
+                        <strong style="color: var(--accent-stocks);">Tokenized Stocks:</strong>
+                        <ul
+                            style="list-style: none; color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.5rem;">
+                            <li>Search on CoinGecko for</li>
+                            <li>tokenized versions or</li>
+                            <li>use manual price input</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/app.js"></script>
+    <script>
+        // Admin Page Logic
+        let selectedCategory = 'crypto';
+        let editingId = null;
+        let currentUser = null;
+
+        function initAdmin() {
+            setupAuth();
+            setupCategorySelector();
+            setupForm();
+            setupSync();
+            renderAssetsList();
+        }
+
+        // ============ Authentication ============
+        function setupAuth() {
+            const authForm = document.getElementById('authForm');
+            const skipBtn = document.getElementById('skipAuthBtn');
+
+            authForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const token = document.getElementById('authToken').value.trim();
+                const errorDiv = document.getElementById('authError');
+
+                errorDiv.style.display = 'none';
+
+                const result = await PortfolioApp.validateToken(token);
+
+                if (result.valid) {
+                    PortfolioApp.setSessionToken(token);
+                    currentUser = result.username;
+                    hideAuthModal();
+                    showSyncBar();
+                } else {
+                    errorDiv.textContent = 'Invalid token. Please check and try again.';
+                    errorDiv.style.display = 'block';
+                }
+            });
+
+            skipBtn.addEventListener('click', () => {
+                hideAuthModal();
+            });
+        }
+
+        function hideAuthModal() {
+            document.getElementById('authOverlay').style.display = 'none';
+        }
+
+        function showSyncBar() {
+            document.getElementById('syncBar').style.display = 'flex';
+            document.getElementById('username').textContent = currentUser || 'Guest';
+        }
+
+        // ============ Sync Functions ============
+        function setupSync() {
+            document.getElementById('syncUpBtn').addEventListener('click', syncUp);
+            document.getElementById('syncDownBtn').addEventListener('click', syncDown);
+            document.getElementById('logoutBtn').addEventListener('click', logout);
+        }
+
+        async function syncUp() {
+            const statusEl = document.getElementById('syncStatus');
+            statusEl.textContent = 'Pushing...';
+            statusEl.className = 'sync-status';
+
+            try {
+                const result = await PortfolioApp.syncToGist();
+                statusEl.textContent = '✓ Pushed successfully!';
+                statusEl.className = 'sync-status success';
+            } catch (error) {
+                statusEl.textContent = '✗ Push failed: ' + error.message;
+                statusEl.className = 'sync-status error';
+            }
+        }
+
+        async function syncDown() {
+            const statusEl = document.getElementById('syncStatus');
+            statusEl.textContent = 'Pulling...';
+            statusEl.className = 'sync-status';
+
+            try {
+                const result = await PortfolioApp.syncFromGist();
+                if (result.success) {
+                    statusEl.textContent = `✓ Pulled ${result.count} assets!`;
+                    statusEl.className = 'sync-status success';
+                    renderAssetsList();
+                } else {
+                    statusEl.textContent = result.message;
+                    statusEl.className = 'sync-status error';
+                }
+            } catch (error) {
+                statusEl.textContent = '✗ Pull failed: ' + error.message;
+                statusEl.className = 'sync-status error';
+            }
+        }
+
+        function logout() {
+            PortfolioApp.logout();
+            currentUser = null;
+            document.getElementById('syncBar').style.display = 'none';
+            document.getElementById('authOverlay').style.display = 'flex';
+            document.getElementById('authToken').value = '';
+        }
+
+        // ============ Category Selector ============
+        function setupCategorySelector() {
+            const buttons = document.querySelectorAll('.category-btn');
+
+            buttons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    buttons.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    selectedCategory = btn.dataset.category;
+                });
+            });
+        }
+
+        // ============ Form Handling ============
+        function setupForm() {
+            const form = document.getElementById('assetForm');
+            const cancelBtn = document.getElementById('cancelBtn');
+
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                saveAsset();
+            });
+
+            cancelBtn.addEventListener('click', () => {
+                resetForm();
+            });
+        }
+
+        function saveAsset() {
+            const asset = {
+                name: document.getElementById('assetName').value.trim(),
+                symbol: document.getElementById('assetSymbol').value.trim().toUpperCase(),
+                coingeckoId: document.getElementById('coingeckoId').value.trim().toLowerCase(),
+                manualPrice: document.getElementById('manualPrice').value || null,
+                buyPrice: document.getElementById('buyPrice').value || null,
+                balance: document.getElementById('assetBalance').value,
+                iconUrl: document.getElementById('iconUrl').value.trim() || null,
+                category: selectedCategory
+            };
+
+            if (editingId) {
+                PortfolioApp.updateAsset(editingId, asset);
+            } else {
+                PortfolioApp.addAsset(asset);
+            }
+
+            resetForm();
+            renderAssetsList();
+        }
+
+        function editAsset(id) {
+            const assets = PortfolioApp.getAssets();
+            const asset = assets.find(a => a.id === id);
+
+            if (!asset) return;
+
+            editingId = id;
+
+            // Fill form
+            document.getElementById('assetName').value = asset.name;
+            document.getElementById('assetSymbol').value = asset.symbol || '';
+            document.getElementById('coingeckoId').value = asset.coingeckoId || '';
+            document.getElementById('manualPrice').value = asset.manualPrice || '';
+            document.getElementById('buyPrice').value = asset.buyPrice || '';
+            document.getElementById('assetBalance').value = asset.balance;
+            document.getElementById('iconUrl').value = asset.iconUrl || '';
+
+            // Select category
+            selectedCategory = asset.category;
+            document.querySelectorAll('.category-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.category === selectedCategory);
+            });
+
+            // Update UI
+            document.getElementById('formTitle').textContent = 'Edit Asset';
+            document.getElementById('cancelBtn').style.display = 'block';
+
+            // Scroll to form
+            document.getElementById('assetForm').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function deleteAsset(id) {
+            if (confirm('Are you sure you want to delete this asset?')) {
+                PortfolioApp.deleteAsset(id);
+                renderAssetsList();
+
+                if (editingId === id) {
+                    resetForm();
+                }
+            }
+        }
+
+        function resetForm() {
+            editingId = null;
+            document.getElementById('assetForm').reset();
+            document.getElementById('formTitle').textContent = 'Add New Asset';
+            document.getElementById('cancelBtn').style.display = 'none';
+
+            // Reset category to crypto
+            selectedCategory = 'crypto';
+            document.querySelectorAll('.category-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.category === 'crypto');
+            });
+        }
+
+        function renderAssetsList() {
+            const container = document.getElementById('adminAssetsList');
+            const assets = PortfolioApp.getAssets();
+
+            if (assets.length === 0) {
+                container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">📭</div>
+            <p>No assets added yet</p>
+          </div>
+        `;
+                return;
+            }
+
+            // Group by category
+            const grouped = {
+                crypto: assets.filter(a => a.category === 'crypto'),
+                stocks: assets.filter(a => a.category === 'stocks'),
+                gold: assets.filter(a => a.category === 'gold')
+            };
+
+            let html = '';
+
+            const categoryLabels = {
+                crypto: '🪙 Crypto',
+                stocks: '📈 USA Stocks',
+                gold: '🥇 Gold'
+            };
+
+            Object.entries(grouped).forEach(([cat, catAssets]) => {
+                if (catAssets.length === 0) return;
+
+                html += `<h4 style="color: var(--accent-${cat}); margin: 1rem 0 0.5rem;">${categoryLabels[cat]}</h4>`;
+
+                catAssets.forEach(asset => {
+                    const buyPriceInfo = asset.buyPrice ? `Buy: $${asset.buyPrice}` : 'No buy price';
+                    html += `
+            <div class="admin-asset-item">
+              <div class="asset-info">
+                <div class="asset-icon ${asset.category}">
+                  ${asset.symbol ? asset.symbol.substring(0, 2) : '??'}
+                </div>
+                <div>
+                  <div class="asset-name">${asset.name}</div>
+                  <div class="asset-symbol">
+                    ${asset.symbol || ''} 
+                    ${asset.coingeckoId ? `• API: ${asset.coingeckoId}` : ''}
+                    ${asset.manualPrice ? `• Manual: $${asset.manualPrice}` : ''}
+                  </div>
+                  <div class="asset-balance" style="margin-top: 4px;">
+                    Balance: ${asset.balance} • ${buyPriceInfo}
+                  </div>
+                </div>
+              </div>
+              <div class="admin-asset-actions">
+                <button class="btn btn-secondary btn-icon" onclick="editAsset('${asset.id}')" title="Edit">
+                  ✏️
+                </button>
+                <button class="btn btn-danger btn-icon" onclick="deleteAsset('${asset.id}')" title="Delete">
+                  🗑️
+                </button>
+              </div>
+            </div>
+          `;
+                });
+            });
+
+            container.innerHTML = html;
+        }
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', initAdmin);
+    </script>
+</body>
+
+</html>
