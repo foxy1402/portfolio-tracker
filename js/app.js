@@ -143,12 +143,10 @@ const CurrencyManager = {
 
   currencies: {
     USD: { symbol: '$', name: 'US Dollar', flag: '🇺🇸' },
+    VND: { symbol: '₫', name: 'Vietnamese Dong', flag: '🇻🇳' },
     EUR: { symbol: '€', name: 'Euro', flag: '🇪🇺' },
     GBP: { symbol: '£', name: 'British Pound', flag: '🇬🇧' },
-    JPY: { symbol: '¥', name: 'Japanese Yen', flag: '🇯🇵' },
-    AUD: { symbol: 'A$', name: 'Australian Dollar', flag: '🇦🇺' },
-    CAD: { symbol: 'C$', name: 'Canadian Dollar', flag: '🇨🇦' },
-    CHF: { symbol: 'Fr', name: 'Swiss Franc', flag: '🇨🇭' }
+    JPY: { symbol: '¥', name: 'Japanese Yen', flag: '🇯🇵' }
   },
 
   rates: { USD: 1 }, // Base rates (USD = 1)
@@ -189,8 +187,8 @@ const CurrencyManager = {
       }
     } catch (error) {
       console.warn('Failed to fetch exchange rates, using defaults');
-      // Use fallback rates
-      this.rates = { USD: 1, EUR: 0.92, GBP: 0.79, JPY: 149.5, AUD: 1.53, CAD: 1.36, CHF: 0.88 };
+      // Use fallback rates (approximate)
+      this.rates = { USD: 1, VND: 24500, EUR: 0.92, GBP: 0.79, JPY: 149.5 };
     }
   },
 
@@ -201,6 +199,10 @@ const CurrencyManager = {
       return true;
     }
     return false;
+  },
+
+  async setCurrency(currency) {
+    return this.set(currency);
   },
 
   get() {
@@ -863,28 +865,14 @@ const PortfolioApp = {
     };
   },
 
-  // Format currency - compact for large numbers
+  // Format currency - with conversion support
   formatCurrency(value, compact = false) {
-    if (compact && Math.abs(value) >= 1000000) {
-      // 7+ figures: use compact notation
-      return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD',
-        notation: 'compact',
-        maximumFractionDigits: 1
-      }).format(value);
+    // Use CurrencyManager if initialized
+    if (typeof CurrencyManager !== 'undefined' && CurrencyManager.current) {
+      return CurrencyManager.format(value, compact);
     }
 
-    if (Math.abs(value) >= 10000) {
-      // 5+ figures: no decimals
-      return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0
-      }).format(value);
-    }
-
+    // Fallback to USD
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
@@ -895,6 +883,12 @@ const PortfolioApp = {
 
   // Format currency for chart center (always compact for large)
   formatCurrencyCompact(value) {
+    // Use CurrencyManager if initialized
+    if (typeof CurrencyManager !== 'undefined' && CurrencyManager.current) {
+      return CurrencyManager.format(value, true);
+    }
+
+    // Fallback to USD
     if (Math.abs(value) >= 1000000) {
       return new Intl.NumberFormat('en-US', {
         style: 'currency',
