@@ -242,9 +242,16 @@
                             </label>
                             <input type="url" class="form-input" id="iconUrl"
                                 placeholder="https://... (paste image URL)">
-                            <div class="form-hint">
-                                Leave empty to auto-fetch from CoinGecko, or paste a custom icon URL
-                            </div>
+                        </div>
+
+                        <!-- Notes -->
+                        <div class="form-group">
+                            <label class="form-label" for="assetNotes">
+                                Notes
+                                <span style="color: var(--text-muted); font-weight: normal;">(optional)</span>
+                            </label>
+                            <textarea class="form-input notes-field" id="assetNotes"
+                                placeholder="Add notes about this asset (strategy, target, reminders...)"></textarea>
                         </div>
 
                         <!-- Submit Buttons -->
@@ -261,12 +268,42 @@
 
                 <!-- Assets List -->
                 <div class="card fade-in">
-                    <div class="card-title">Your Assets</div>
+                    <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+                        Your Assets
+                        <div style="display: flex; gap: 8px;">
+                            <button class="export-btn" id="exportCsvBtn" title="Export to CSV">
+                                📥 Export CSV
+                            </button>
+                        </div>
+                    </div>
 
                     <div id="adminAssetsList">
                         <div class="empty-state">
                             <div class="empty-state-icon">📭</div>
                             <p>No assets added yet</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Transaction History -->
+                <div class="card fade-in" style="margin-top: var(--spacing-lg);">
+                    <div class="card-title collapsible-header" onclick="toggleTransactions()">
+                        📋 Transaction History
+                        <span class="collapsible-icon">▼</span>
+                    </div>
+                    <div id="transactionContent" class="collapsible-content">
+                        <div class="transaction-list" id="transactionList">
+                            <p style="color: var(--text-muted); text-align: center; padding: 1rem;">
+                                Transactions are logged when you add or update assets.
+                            </p>
+                        </div>
+                        <div style="margin-top: var(--spacing-sm); display: flex; gap: 8px;">
+                            <button class="export-btn" id="exportTxBtn" style="flex: 1;">
+                                📥 Export Transactions
+                            </button>
+                            <button class="btn btn-secondary" id="clearTxBtn" style="color: #ff5050;">
+                                🗑️ Clear
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -311,17 +348,22 @@
     <!-- Scripts -->
     <script src="js/app.js"></script>
     <script>
-        // Admin Page Logic
+        // Admin Page Logic - Enhanced
         let selectedCategory = 'crypto';
         let editingId = null;
         let currentUser = null;
 
         function initAdmin() {
+            // Initialize theme
+            ThemeManager.init();
+
             setupAuth();
             setupCategorySelector();
             setupForm();
             setupSync();
+            setupExport();
             renderAssetsList();
+            renderTransactionList();
         }
 
         // ============ Authentication ============
@@ -343,6 +385,7 @@
                     currentUser = result.username;
                     hideAuthModal();
                     showSyncBar();
+                    ToastManager.success(`Welcome, ${currentUser}!`);
                 } else {
                     errorDiv.textContent = 'Invalid token. Please check and try again.';
                     errorDiv.style.display = 'block';
@@ -351,6 +394,7 @@
 
             skipBtn.addEventListener('click', () => {
                 hideAuthModal();
+                ToastManager.info('Working in local-only mode');
             });
         }
 
@@ -379,9 +423,11 @@
                 const result = await PortfolioApp.syncToGist();
                 statusEl.textContent = '✓ Pushed successfully!';
                 statusEl.className = 'sync-status success';
+                ToastManager.success('Data synced to cloud!');
             } catch (error) {
                 statusEl.textContent = '✗ Push failed: ' + error.message;
                 statusEl.className = 'sync-status error';
+                ToastManager.error('Sync failed: ' + error.message);
             }
         }
 
@@ -396,6 +442,7 @@
                     statusEl.textContent = `✓ Pulled ${result.count} assets!`;
                     statusEl.className = 'sync-status success';
                     renderAssetsList();
+                    ToastManager.success(`Loaded ${result.count} assets from cloud!`);
                 } else {
                     statusEl.textContent = result.message;
                     statusEl.className = 'sync-status error';
@@ -403,6 +450,7 @@
             } catch (error) {
                 statusEl.textContent = '✗ Pull failed: ' + error.message;
                 statusEl.className = 'sync-status error';
+                ToastManager.error('Pull failed: ' + error.message);
             }
         }
 
@@ -412,6 +460,7 @@
             document.getElementById('syncBar').style.display = 'none';
             document.getElementById('authOverlay').style.display = 'flex';
             document.getElementById('authToken').value = '';
+            ToastManager.info('Logged out');
         }
 
         // ============ Category Selector ============
@@ -451,17 +500,38 @@
                 buyPrice: document.getElementById('buyPrice').value || null,
                 balance: document.getElementById('assetBalance').value,
                 iconUrl: document.getElementById('iconUrl').value.trim() || null,
+                notes: document.getElementById('assetNotes').value.trim() || null,
                 category: selectedCategory
             };
 
+            const isEdit = !!editingId;
+            const oldAsset = isEdit ? PortfolioApp.getAssets().find(a => a.id === editingId) : null;
+
             if (editingId) {
                 PortfolioApp.updateAsset(editingId, asset);
+                ToastManager.success(`Updated ${asset.name}`);
             } else {
                 PortfolioApp.addAsset(asset);
+                ToastManager.success(`Added ${asset.name}`);
+            }
+
+            // Log transaction
+            const balanceChange = parseFloat(asset.balance) - (oldAsset ? parseFloat(oldAsset.balance) : 0);
+            if (balanceChange !== 0 || !isEdit) {
+                TransactionHistory.add({
+                    type: isEdit ? (balanceChange > 0 ? 'buy' : 'sell') : 'buy',
+                    assetId: editingId || Date.now().toString(),
+                    assetName: asset.name,
+                    amount: Math.abs(balanceChange || parseFloat(asset.balance)),
+                    price: parseFloat(asset.manualPrice || asset.buyPrice || 0),
+                    total: Math.abs(balanceChange || parseFloat(asset.balance)) * parseFloat(asset.buyPrice || 0),
+                    notes: isEdit ? 'Balance update' : 'Initial purchase'
+                });
             }
 
             resetForm();
             renderAssetsList();
+            renderTransactionList();
         }
 
         function editAsset(id) {
@@ -480,6 +550,7 @@
             document.getElementById('buyPrice').value = asset.buyPrice || '';
             document.getElementById('assetBalance').value = asset.balance;
             document.getElementById('iconUrl').value = asset.iconUrl || '';
+            document.getElementById('assetNotes').value = asset.notes || '';
 
             // Select category
             selectedCategory = asset.category;
@@ -496,9 +567,13 @@
         }
 
         function deleteAsset(id) {
-            if (confirm('Are you sure you want to delete this asset?')) {
+            const asset = PortfolioApp.getAssets().find(a => a.id === id);
+            if (!asset) return;
+
+            if (confirm(`Are you sure you want to delete ${asset.name}?`)) {
                 PortfolioApp.deleteAsset(id);
                 renderAssetsList();
+                ToastManager.info(`Deleted ${asset.name}`);
 
                 if (editingId === id) {
                     resetForm();
@@ -519,34 +594,132 @@
             });
         }
 
+        // ============ Export Functions ============
+        function setupExport() {
+            document.getElementById('exportCsvBtn').addEventListener('click', exportAssetsCSV);
+            document.getElementById('exportTxBtn').addEventListener('click', exportTransactionsCSV);
+            document.getElementById('clearTxBtn').addEventListener('click', clearTransactions);
+        }
+
+        function exportAssetsCSV() {
+            const assets = PortfolioApp.getAssets();
+            if (assets.length === 0) {
+                ToastManager.warning('No assets to export');
+                return;
+            }
+
+            const headers = ['Name', 'Symbol', 'Category', 'Balance', 'Buy Price', 'CoinGecko ID', 'Notes'];
+            const rows = assets.map(a => [
+                a.name,
+                a.symbol || '',
+                a.category,
+                a.balance,
+                a.buyPrice || '',
+                a.coingeckoId || '',
+                (a.notes || '').replace(/,/g, ';')
+            ]);
+
+            downloadCSV([headers, ...rows], 'portfolio_assets.csv');
+            ToastManager.success('Assets exported!');
+        }
+
+        function exportTransactionsCSV() {
+            const csv = TransactionHistory.export();
+            if (!csv || csv.split('\n').length < 2) {
+                ToastManager.warning('No transactions to export');
+                return;
+            }
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'portfolio_transactions.csv';
+            a.click();
+            URL.revokeObjectURL(url);
+            ToastManager.success('Transactions exported!');
+        }
+
+        function downloadCSV(rows, filename) {
+            const csv = rows.map(r => r.join(',')).join('\n');
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function clearTransactions() {
+            if (confirm('Clear all transaction history?')) {
+                TransactionHistory.clear();
+                renderTransactionList();
+                ToastManager.info('Transaction history cleared');
+            }
+        }
+
+        // ============ Transaction History ============
+        function toggleTransactions() {
+            const content = document.getElementById('transactionContent');
+            content.parentElement.classList.toggle('collapsed');
+        }
+
+        function renderTransactionList() {
+            const container = document.getElementById('transactionList');
+            const transactions = TransactionHistory.getAll().slice(0, 20);
+
+            if (transactions.length === 0) {
+                container.innerHTML = `
+                    <p style="color: var(--text-muted); text-align: center; padding: 1rem;">
+                        No transactions yet.
+                    </p>
+                `;
+                return;
+            }
+
+            container.innerHTML = transactions.map(tx => `
+                <div class="transaction-item">
+                    <div>
+                        <span class="transaction-type ${tx.type}">${tx.type}</span>
+                        <span style="margin-left: 8px;">${tx.assetName}</span>
+                    </div>
+                    <div style="text-align: right;">
+                        <div>${tx.amount} units</div>
+                        <div class="transaction-date">${new Date(tx.timestamp).toLocaleDateString()}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // ============ Render Assets ============
         function renderAssetsList() {
             const container = document.getElementById('adminAssetsList');
             const assets = PortfolioApp.getAssets();
 
             if (assets.length === 0) {
                 container.innerHTML = `
-          <div class="empty-state">
-            <div class="empty-state-icon">📭</div>
-            <p>No assets added yet</p>
-          </div>
-        `;
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📭</div>
+                        <p>No assets added yet</p>
+                    </div>
+                `;
                 return;
             }
 
-            // Group by category
             const grouped = {
                 crypto: assets.filter(a => a.category === 'crypto'),
                 stocks: assets.filter(a => a.category === 'stocks'),
                 gold: assets.filter(a => a.category === 'gold')
             };
 
-            let html = '';
-
             const categoryLabels = {
                 crypto: '🪙 Crypto',
                 stocks: '📈 USA Stocks',
                 gold: '🥇 Gold'
             };
+
+            let html = '';
 
             Object.entries(grouped).forEach(([cat, catAssets]) => {
                 if (catAssets.length === 0) return;
@@ -555,34 +728,35 @@
 
                 catAssets.forEach(asset => {
                     const buyPriceInfo = asset.buyPrice ? `Buy: $${asset.buyPrice}` : 'No buy price';
+                    const notesIcon = asset.notes ? '📝' : '';
                     html += `
-            <div class="admin-asset-item">
-              <div class="asset-info">
-                <div class="asset-icon ${asset.category}">
-                  ${asset.symbol ? asset.symbol.substring(0, 2) : '??'}
-                </div>
-                <div>
-                  <div class="asset-name">${asset.name}</div>
-                  <div class="asset-symbol">
-                    ${asset.symbol || ''} 
-                    ${asset.coingeckoId ? `• API: ${asset.coingeckoId}` : ''}
-                    ${asset.manualPrice ? `• Manual: $${asset.manualPrice}` : ''}
-                  </div>
-                  <div class="asset-balance" style="margin-top: 4px;">
-                    Balance: ${asset.balance} • ${buyPriceInfo}
-                  </div>
-                </div>
-              </div>
-              <div class="admin-asset-actions">
-                <button class="btn btn-secondary btn-icon" onclick="editAsset('${asset.id}')" title="Edit">
-                  ✏️
-                </button>
-                <button class="btn btn-danger btn-icon" onclick="deleteAsset('${asset.id}')" title="Delete">
-                  🗑️
-                </button>
-              </div>
-            </div>
-          `;
+                        <div class="admin-asset-item">
+                            <div class="asset-info">
+                                <div class="asset-icon ${asset.category}">
+                                    ${asset.symbol ? asset.symbol.substring(0, 2) : '??'}
+                                </div>
+                                <div>
+                                    <div class="asset-name">${asset.name} ${notesIcon}</div>
+                                    <div class="asset-symbol">
+                                        ${asset.symbol || ''} 
+                                        ${asset.coingeckoId ? `• API: ${asset.coingeckoId}` : ''}
+                                        ${asset.manualPrice ? `• Manual: $${asset.manualPrice}` : ''}
+                                    </div>
+                                    <div class="asset-balance" style="margin-top: 4px;">
+                                        Balance: ${asset.balance} • ${buyPriceInfo}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="admin-asset-actions">
+                                <button class="btn btn-secondary btn-icon" onclick="editAsset('${asset.id}')" title="Edit">
+                                    ✏️
+                                </button>
+                                <button class="btn btn-danger btn-icon" onclick="deleteAsset('${asset.id}')" title="Delete">
+                                    🗑️
+                                </button>
+                            </div>
+                        </div>
+                    `;
                 });
             });
 

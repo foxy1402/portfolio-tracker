@@ -181,17 +181,25 @@
         <img src="images/icon-192.png" alt="Logo" style="width: 32px; height: 32px; border-radius: 6px;">
         Portfolio Tracker
       </div>
-      <nav style="display: flex; gap: 12px; align-items: center;">
-        <label class="mobile-toggle" title="Reorder layout for mobile: Chart → Categories → Assets">
+      <nav style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+        <!-- Currency Selector -->
+        <select id="currencySelect" class="currency-select" title="Select currency">
+          <option value="USD">🇺🇸 USD</option>
+          <option value="EUR">🇪🇺 EUR</option>
+          <option value="GBP">🇬🇧 GBP</option>
+          <option value="TRY">🇹🇷 TRY</option>
+        </select>
+        <!-- Theme Toggle -->
+        <button id="themeToggle" class="theme-toggle" title="Toggle theme">
+          <span id="themeIcon">🌙</span>
+        </button>
+        <!-- Mobile Mode Toggle -->
+        <label class="mobile-toggle" title="Reorder layout for mobile">
           <input type="checkbox" id="mobileMode">
           📱
         </label>
-        <a href="rebalance.html" class="nav-link">
-          ⚖️ Rebalance
-        </a>
-        <a href="admin.html" class="nav-link">
-          ⚙️ Manage Assets
-        </a>
+        <a href="rebalance.html" class="nav-link">⚖️ Rebalance</a>
+        <a href="admin.html" class="nav-link">⚙️ Manage</a>
       </nav>
     </header>
 
@@ -253,6 +261,30 @@
             <div class="total-profit" id="totalProfitContainer" style="display: none;">
               <div class="total-profit-label">Total P/L</div>
               <div class="total-profit-value" id="totalProfitValue">$0</div>
+            </div>
+          </div>
+
+          <!-- History Chart Section -->
+          <div class="history-section" id="historySection">
+            <div class="history-header" onclick="toggleHistoryChart()"
+              style="cursor: pointer; display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-top: 1px solid var(--border-color); margin-top: 15px;">
+              <span style="font-size: 0.9rem; color: var(--text-secondary);">📈 Performance History</span>
+              <span id="historyToggle" style="color: var(--text-muted);">▼</span>
+            </div>
+            <div id="historyContent" style="display: block;">
+              <div class="period-selector" style="display: flex; gap: 8px; margin-bottom: 12px;">
+                <button class="period-btn active" data-days="7" onclick="updateHistoryChart(7)">7D</button>
+                <button class="period-btn" data-days="30" onclick="updateHistoryChart(30)">30D</button>
+                <button class="period-btn" data-days="90" onclick="updateHistoryChart(90)">90D</button>
+                <button class="period-btn" data-days="0" onclick="updateHistoryChart(0)">All</button>
+              </div>
+              <div class="history-chart" style="height: 150px; position: relative;">
+                <canvas id="historyChart"></canvas>
+                <div id="historyEmpty"
+                  style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 0.85rem;">
+                  Not enough data yet. Check back later!
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -470,10 +502,110 @@
     // Event listeners
     document.getElementById('refreshBtn').addEventListener('click', refreshData);
 
+    // Theme Toggle
+    document.getElementById('themeToggle').addEventListener('click', () => {
+      const newTheme = ThemeManager.toggle();
+      document.getElementById('themeIcon').textContent = newTheme === 'dark' ? '🌙' : '☀️';
+      ToastManager.success(`Switched to ${newTheme} theme`);
+    });
+
+    // Currency Selector
+    document.getElementById('currencySelect').addEventListener('change', async (e) => {
+      await CurrencyManager.setCurrency(e.target.value);
+      ToastManager.info(`Currency changed to ${e.target.value}`);
+      refreshData();
+    });
+
+    // History Chart Functions
+    function toggleHistoryChart() {
+      const content = document.getElementById('historyContent');
+      const toggle = document.getElementById('historyToggle');
+      if (content.style.display === 'none') {
+        content.style.display = 'block';
+        toggle.textContent = '▼';
+      } else {
+        content.style.display = 'none';
+        toggle.textContent = '▶';
+      }
+    }
+
+    function updateHistoryChart(days) {
+      // Update active button
+      document.querySelectorAll('.period-btn').forEach(btn => {
+        btn.classList.toggle('active', parseInt(btn.dataset.days) === days);
+      });
+
+      // Get history data
+      const history = HistoryTracker.getAll();
+      const filtered = days === 0 ? history : history.slice(-days);
+
+      if (filtered.length < 2) {
+        document.getElementById('historyEmpty').style.display = 'flex';
+        return;
+      }
+
+      document.getElementById('historyEmpty').style.display = 'none';
+      drawHistoryChart(filtered);
+    }
+
+    function drawHistoryChart(data) {
+      const canvas = document.getElementById('historyChart');
+      const ctx = canvas.getContext('2d');
+      const rect = canvas.parentElement.getBoundingClientRect();
+
+      canvas.width = rect.width * window.devicePixelRatio;
+      canvas.height = rect.height * window.devicePixelRatio;
+      canvas.style.width = rect.width + 'px';
+      canvas.style.height = rect.height + 'px';
+      ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+      const width = rect.width;
+      const height = rect.height;
+      const padding = { top: 10, right: 10, bottom: 20, left: 50 };
+
+      const values = data.map(d => d.total);
+      const minVal = Math.min(...values) * 0.95;
+      const maxVal = Math.max(...values) * 1.05;
+
+      ctx.clearRect(0, 0, width, height);
+
+      // Draw line
+      ctx.beginPath();
+      ctx.strokeStyle = '#f7931a';
+      ctx.lineWidth = 2;
+
+      data.forEach((d, i) => {
+        const x = padding.left + (i / (data.length - 1)) * (width - padding.left - padding.right);
+        const y = padding.top + (1 - (d.total - minVal) / (maxVal - minVal)) * (height - padding.top - padding.bottom);
+
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+
+      ctx.stroke();
+    }
+
+    // Offline Detection
+    window.addEventListener('online', () => ToastManager.success('Back online!'));
+    window.addEventListener('offline', () => ToastManager.warning('You are offline'));
+
     // Initialize on load
     document.addEventListener('DOMContentLoaded', () => {
+      // Initialize managers
+      ThemeManager.init();
+      CurrencyManager.init();
+
+      // Update theme icon
+      document.getElementById('themeIcon').textContent = ThemeManager.get() === 'dark' ? '🌙' : '☀️';
+
+      // Set currency selector
+      document.getElementById('currencySelect').value = CurrencyManager.current;
+
       initMobileMode();
       initDashboard();
+
+      // Initialize history chart
+      updateHistoryChart(7);
 
       // Register Service Worker
       if ('serviceWorker' in navigator) {

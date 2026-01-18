@@ -654,6 +654,9 @@
         let assetSelections = {}; // { assetId: { selected: bool, targetPercent: number } }
 
         async function initRebalance() {
+            // Initialize theme
+            ThemeManager.init();
+
             await loadPortfolio();
             renderCategorySections();
             setupEventListeners();
