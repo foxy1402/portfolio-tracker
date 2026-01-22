@@ -1,5 +1,236 @@
-// Portfolio Tracker - Core Application Logic with GitHub Gist Sync
-// Enhanced with Toast, Theme, Currency, Caching, Alerts, and History
+// Portfolio Tracker - Core Application Logic (FIXED & IMPROVED)
+// Security: XSS protection, rate limiting, backup system
+// Performance: Caching, debouncing, optimized storage
+
+// ============ Configuration ============
+const AppConfig = {
+  API: {
+    COINGECKO_BASE: 'https://api.coingecko.com/api/v3',
+    GITHUB_BASE: 'https://api.github.com/gists',
+    EXCHANGE_RATE: 'https://api.exchangerate-api.com/v4/latest/USD',
+    RATE_LIMIT: {
+      MAX_REQUESTS: 10,
+      PER_MINUTE: 60000
+    }
+  },
+  CACHE: {
+    PRICE_DURATION: 5 * 60 * 1000,
+    EXCHANGE_DURATION: 60 * 60 * 1000
+  },
+  STORAGE: {
+    ASSETS_KEY: 'portfolio_assets',
+    GIST_ID_KEY: 'portfolio_gist_id',
+    BACKUPS_KEY: 'portfolio_backups',
+    MAX_BACKUPS: 10
+  },
+  HISTORY: {
+    MAX_ENTRIES: 365
+  },
+  UI: {
+    TOAST_DURATION: 3000,
+    DEBOUNCE_DELAY: 300
+  }
+};
+
+// ============ Utility Functions ============
+const Utils = {
+  /**
+   * Escape HTML to prevent XSS
+   * @param {string} unsafe - Unsafe string
+   * @returns {string} Safe HTML string
+   */
+  escapeHtml(unsafe) {
+    if (typeof unsafe !== 'string') return '';
+    return unsafe
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  },
+
+  /**
+   * Debounce function calls
+   * @param {Function} func - Function to debounce
+   * @param {number} wait - Wait time in ms
+   * @returns {Function} Debounced function
+   */
+  debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
+        clearTimeout(timeout);
+        func.apply(this, args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  },
+
+  /**
+   * Deep clone an object
+   * @param {Object} obj - Object to clone
+   * @returns {Object} Cloned object
+   */
+  deepClone(obj) {
+    return JSON.parse(JSON.stringify(obj));
+  }
+};
+
+// ============ Error Handling ============
+class AppError extends Error {
+  constructor(message, code, details = {}) {
+    super(message);
+    this.name = 'AppError';
+    this.code = code;
+    this.details = details;
+  }
+}
+
+const ErrorHandler = {
+  handle(error, context = '') {
+    console.error(`[${context}]`, error);
+
+    let userMessage = 'Something went wrong. Please try again.';
+    
+    if (error.code === 'NETWORK_ERROR') {
+      userMessage = 'Network error. Please check your connection.';
+    } else if (error.code === 'API_RATE_LIMIT') {
+      userMessage = 'Too many requests. Please wait a moment.';
+    } else if (error.code === 'GIST_ERROR') {
+      userMessage = 'Failed to sync with cloud. Your data is safe locally.';
+    } else if (error.code === 'VALIDATION_ERROR') {
+      userMessage = error.message;
+    }
+
+    ToastManager.error(userMessage);
+    return null;
+  }
+};
+
+// ============ Rate Limiter ============
+class RateLimiter {
+  constructor(maxRequests = 10, perMinute = 60000) {
+    this.maxRequests = maxRequests;
+    this.perMinute = perMinute;
+    this.queue = [];
+    this.processing = false;
+    this.lastBatchTime = 0;
+  }
+
+  async execute(fn) {
+    return new Promise((resolve, reject) => {
+      this.queue.push({ fn, resolve, reject });
+      this.processQueue();
+    });
+  }
+
+  async processQueue() {
+    if (this.processing || this.queue.length === 0) return;
+    
+    const now = Date.now();
+    const timeSinceLastBatch = now - this.lastBatchTime;
+    
+    if (timeSinceLastBatch < this.perMinute && this.lastBatchTime > 0) {
+      const waitTime = this.perMinute - timeSinceLastBatch;
+      setTimeout(() => this.processQueue(), waitTime);
+      return;
+    }
+    
+    this.processing = true;
+    this.lastBatchTime = now;
+    
+    const batch = this.queue.splice(0, this.maxRequests);
+    
+    try {
+      const results = await Promise.all(
+        batch.map(({ fn }) => fn())
+      );
+      batch.forEach(({ resolve }, i) => resolve(results[i]));
+    } catch (error) {
+      batch.forEach(({ reject }) => reject(error));
+    }
+    
+    this.processing = false;
+    
+    if (this.queue.length > 0) {
+      setTimeout(() => this.processQueue(), 100);
+    }
+  }
+}
+
+const apiRateLimiter = new RateLimiter(
+  AppConfig.API.RATE_LIMIT.MAX_REQUESTS,
+  AppConfig.API.RATE_LIMIT.PER_MINUTE
+);
+
+// ============ Backup Manager ============
+const BackupManager = {
+  BACKUP_KEY: AppConfig.STORAGE.BACKUPS_KEY,
+  MAX_BACKUPS: AppConfig.STORAGE.MAX_BACKUPS,
+
+  createBackup(label = 'auto') {
+    try {
+      const backups = this.getBackups();
+      const assets = PortfolioApp.getAssets();
+      
+      backups.unshift({
+        timestamp: Date.now(),
+        label,
+        data: assets,
+        version: '1.0',
+        count: assets.length
+      });
+
+      if (backups.length > this.MAX_BACKUPS) {
+        backups.length = this.MAX_BACKUPS;
+      }
+
+      localStorage.setItem(this.BACKUP_KEY, JSON.stringify(backups));
+      return true;
+    } catch (error) {
+      console.error('Backup creation failed:', error);
+      return false;
+    }
+  },
+
+  getBackups() {
+    try {
+      const data = localStorage.getItem(this.BACKUP_KEY);
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  restore(index = 0) {
+    try {
+      const backups = this.getBackups();
+      if (backups[index]) {
+        PortfolioApp.saveAssets(backups[index].data);
+        ToastManager.success('Backup restored successfully!');
+        return true;
+      }
+      return false;
+    } catch (error) {
+      ErrorHandler.handle(error, 'BackupManager.restore');
+      return false;
+    }
+  },
+
+  list() {
+    return this.getBackups().map((backup, index) => ({
+      index,
+      timestamp: new Date(backup.timestamp).toLocaleString(),
+      label: backup.label,
+      count: backup.count
+    }));
+  },
+
+  clear() {
+    localStorage.removeItem(this.BACKUP_KEY);
+  }
+};
 
 // ============ Toast Notification System ============
 const ToastManager = {
@@ -13,7 +244,7 @@ const ToastManager = {
     document.body.appendChild(this.container);
   },
 
-  show(message, type = 'info', duration = 3000) {
+  show(message, type = 'info', duration = AppConfig.UI.TOAST_DURATION) {
     this.init();
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
@@ -25,18 +256,26 @@ const ToastManager = {
       info: 'ℹ'
     };
 
-    toast.innerHTML = `
-      <span class="toast-icon">${icons[type] || icons.info}</span>
-      <span class="toast-message">${message}</span>
-      <button class="toast-close" aria-label="Close">×</button>
-    `;
+    const icon = document.createElement('span');
+    icon.className = 'toast-icon';
+    icon.textContent = icons[type] || icons.info;
 
-    const closeBtn = toast.querySelector('.toast-close');
+    const msg = document.createElement('span');
+    msg.className = 'toast-message';
+    msg.textContent = message; // Safe - using textContent
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'toast-close';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.textContent = '×';
     closeBtn.addEventListener('click', () => this.dismiss(toast));
+
+    toast.appendChild(icon);
+    toast.appendChild(msg);
+    toast.appendChild(closeBtn);
 
     this.container.appendChild(toast);
 
-    // Trigger animation
     requestAnimationFrame(() => toast.classList.add('toast-visible'));
 
     if (duration > 0) {
@@ -65,10 +304,9 @@ const ThemeManager = {
   init() {
     const saved = localStorage.getItem(this.STORAGE_KEY);
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const theme = saved || (prefersDark ? 'dark' : 'dark'); // Default to dark
+    const theme = saved || (prefersDark ? 'dark' : 'dark');
     this.apply(theme);
 
-    // Listen for system theme changes
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
       if (!localStorage.getItem(this.STORAGE_KEY)) {
         this.apply(e.matches ? 'dark' : 'light');
@@ -80,7 +318,6 @@ const ThemeManager = {
     document.documentElement.setAttribute('data-theme', theme);
     document.body.classList.toggle('light-theme', theme === 'light');
 
-    // Update meta theme-color
     const metaTheme = document.querySelector('meta[name="theme-color"]');
     if (metaTheme) {
       metaTheme.content = theme === 'light' ? '#f8fafc' : '#0f172a';
@@ -100,26 +337,149 @@ const ThemeManager = {
   }
 };
 
-// ============ Price Cache Manager ============
+// ============ Cache Manager (Improved) ============
 const CacheManager = {
   PRICE_CACHE_KEY: 'portfolio_price_cache',
-  CACHE_DURATION: 5 * 60 * 1000, // 5 minutes
+  CACHE_DURATION: AppConfig.CACHE.PRICE_DURATION,
 
   getCache() {
     try {
       const data = localStorage.getItem(this.PRICE_CACHE_KEY);
       return data ? JSON.parse(data) : { prices: {}, timestamp: 0 };
     } catch {
-      return { prices: {}, timestamp: 0 };
+      return {
+        ...asset,
+        currentPrice,
+        value,
+        costBasis,
+        profitLoss,
+        profitLossPercent,
+        iconUrl
+      };
+    });
+
+    const categories = {
+      crypto: { assets: [], total: 0, costBasis: 0, profitLoss: 0 },
+      stocks: { assets: [], total: 0, costBasis: 0, profitLoss: 0 },
+      gold: { assets: [], total: 0, costBasis: 0, profitLoss: 0 }
+    };
+
+    let grandTotal = 0;
+    let totalCostBasis = 0;
+    let totalProfitLoss = 0;
+
+    assetsWithValues.forEach(asset => {
+      if (categories[asset.category]) {
+        categories[asset.category].assets.push(asset);
+        categories[asset.category].total += asset.value;
+        categories[asset.category].costBasis += asset.costBasis;
+        categories[asset.category].profitLoss += asset.profitLoss;
+        grandTotal += asset.value;
+        totalCostBasis += asset.costBasis;
+        totalProfitLoss += asset.profitLoss;
+      }
+    });
+
+    Object.keys(categories).forEach(cat => {
+      categories[cat].percentage = grandTotal > 0
+        ? (categories[cat].total / grandTotal * 100)
+        : 0;
+
+      categories[cat].profitLossPercent = categories[cat].costBasis > 0
+        ? ((categories[cat].total - categories[cat].costBasis) / categories[cat].costBasis) * 100
+        : 0;
+
+      categories[cat].assets.forEach(asset => {
+        asset.categoryPercentage = categories[cat].total > 0
+          ? (asset.value / categories[cat].total * 100)
+          : 0;
+        asset.portfolioPercentage = grandTotal > 0
+          ? (asset.value / grandTotal * 100)
+          : 0;
+      });
+    });
+
+    const totalProfitLossPercent = totalCostBasis > 0
+      ? ((grandTotal - totalCostBasis) / totalCostBasis) * 100
+      : 0;
+
+    // Record history
+    HistoryTracker.record(grandTotal, {
+      crypto: categories.crypto.total,
+      stocks: categories.stocks.total,
+      gold: categories.gold.total
+    });
+
+    return {
+      categories,
+      grandTotal,
+      totalCostBasis,
+      totalProfitLoss,
+      totalProfitLossPercent,
+      assets: assetsWithValues
+    };
+  },
+
+  // ============ Formatting Functions ============
+  formatCurrency(value, compact = false) {
+    if (typeof CurrencyManager !== 'undefined' && CurrencyManager.current) {
+      return CurrencyManager.format(value, compact);
+    }
+
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(value);
+  },
+
+  formatCurrencyCompact(value) {
+    if (typeof CurrencyManager !== 'undefined' && CurrencyManager.current) {
+      return CurrencyManager.format(value, true);
+    }
+
+    if (Math.abs(value) >= 1000000) {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        notation: 'compact',
+        maximumFractionDigits: 2
+      }).format(value);
+    }
+
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(value);
+  },
+
+  formatPercent(value) {
+    return value.toFixed(1) + '%';
+  },
+
+  formatProfitLoss(value) {
+    const sign = value >= 0 ? '+' : '';
+    return sign + this.formatCurrency(value);
+  }
+};
+
+window.PortfolioApp = PortfolioApp; prices: {}, timestamp: 0 };
     }
   },
 
   setCache(prices) {
-    const cache = {
-      prices,
-      timestamp: Date.now()
-    };
-    localStorage.setItem(this.PRICE_CACHE_KEY, JSON.stringify(cache));
+    try {
+      const cache = {
+        prices,
+        timestamp: Date.now()
+      };
+      localStorage.setItem(this.PRICE_CACHE_KEY, JSON.stringify(cache));
+    } catch (error) {
+      console.warn('Cache storage failed:', error);
+    }
   },
 
   isValid() {
@@ -149,7 +509,8 @@ const CurrencyManager = {
     JPY: { symbol: '¥', name: 'Japanese Yen', flag: '🇯🇵' }
   },
 
-  rates: { USD: 1 }, // Base rates (USD = 1)
+  rates: { USD: 1 },
+  current: 'USD',
 
   async init() {
     const saved = localStorage.getItem(this.STORAGE_KEY);
@@ -162,21 +523,19 @@ const CurrencyManager = {
   },
 
   async fetchRates() {
-    // Try to load cached rates first
     const cached = localStorage.getItem(this.RATES_KEY);
     if (cached) {
       try {
         const data = JSON.parse(cached);
-        if (Date.now() - data.timestamp < 3600000) { // 1 hour cache
+        if (Date.now() - data.timestamp < AppConfig.CACHE.EXCHANGE_DURATION) {
           this.rates = data.rates;
           return;
         }
       } catch { }
     }
 
-    // Fetch fresh rates from a free API
     try {
-      const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+      const response = await fetch(AppConfig.API.EXCHANGE_RATE);
       if (response.ok) {
         const data = await response.json();
         this.rates = data.rates;
@@ -186,8 +545,7 @@ const CurrencyManager = {
         }));
       }
     } catch (error) {
-      console.warn('Failed to fetch exchange rates, using defaults');
-      // Use fallback rates (approximate)
+      console.warn('Exchange rate fetch failed, using fallback rates');
       this.rates = { USD: 1, VND: 24500, EUR: 0.92, GBP: 0.79, JPY: 149.5 };
     }
   },
@@ -263,21 +621,25 @@ const TransactionHistory = {
   },
 
   add(transaction) {
-    const transactions = this.getAll();
-    const newTx = {
-      id: Date.now().toString(),
-      timestamp: new Date().toISOString(),
-      ...transaction
-    };
-    transactions.unshift(newTx); // Add to beginning
+    try {
+      const transactions = this.getAll();
+      const newTx = {
+        id: Date.now().toString(),
+        timestamp: new Date().toISOString(),
+        ...transaction
+      };
+      transactions.unshift(newTx);
 
-    // Keep only last 500 transactions
-    if (transactions.length > 500) {
-      transactions.length = 500;
+      if (transactions.length > 500) {
+        transactions.length = 500;
+      }
+
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(transactions));
+      return newTx;
+    } catch (error) {
+      console.error('Failed to add transaction:', error);
+      return null;
     }
-
-    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(transactions));
-    return newTx;
   },
 
   getByAsset(assetId) {
@@ -306,112 +668,10 @@ const TransactionHistory = {
   }
 };
 
-// ============ Watchlist Manager ============
-const WatchlistManager = {
-  STORAGE_KEY: 'portfolio_watchlist',
-
-  getAll() {
-    try {
-      const data = localStorage.getItem(this.STORAGE_KEY);
-      return data ? JSON.parse(data) : [];
-    } catch {
-      return [];
-    }
-  },
-
-  add(item) {
-    const list = this.getAll();
-    const newItem = {
-      id: Date.now().toString(),
-      addedAt: new Date().toISOString(),
-      ...item
-    };
-    list.push(newItem);
-    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(list));
-    return newItem;
-  },
-
-  remove(id) {
-    const list = this.getAll().filter(item => item.id !== id);
-    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(list));
-  },
-
-  has(coingeckoId) {
-    return this.getAll().some(item => item.coingeckoId === coingeckoId);
-  }
-};
-
-// ============ Price Alerts Manager ============
-const PriceAlerts = {
-  STORAGE_KEY: 'portfolio_price_alerts',
-
-  getAll() {
-    try {
-      const data = localStorage.getItem(this.STORAGE_KEY);
-      return data ? JSON.parse(data) : [];
-    } catch {
-      return [];
-    }
-  },
-
-  add(alert) {
-    const alerts = this.getAll();
-    const newAlert = {
-      id: Date.now().toString(),
-      createdAt: new Date().toISOString(),
-      triggered: false,
-      ...alert
-    };
-    alerts.push(newAlert);
-    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(alerts));
-    return newAlert;
-  },
-
-  remove(id) {
-    const alerts = this.getAll().filter(a => a.id !== id);
-    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(alerts));
-  },
-
-  update(id, updates) {
-    const alerts = this.getAll();
-    const index = alerts.findIndex(a => a.id === id);
-    if (index !== -1) {
-      alerts[index] = { ...alerts[index], ...updates };
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(alerts));
-    }
-  },
-
-  check(prices) {
-    const alerts = this.getAll();
-    const triggered = [];
-
-    alerts.forEach(alert => {
-      if (alert.triggered) return;
-
-      const currentPrice = prices[alert.coingeckoId]?.usd;
-      if (!currentPrice) return;
-
-      let shouldTrigger = false;
-      if (alert.condition === 'above' && currentPrice >= alert.targetPrice) {
-        shouldTrigger = true;
-      } else if (alert.condition === 'below' && currentPrice <= alert.targetPrice) {
-        shouldTrigger = true;
-      }
-
-      if (shouldTrigger) {
-        this.update(alert.id, { triggered: true, triggeredAt: new Date().toISOString() });
-        triggered.push({ ...alert, currentPrice });
-      }
-    });
-
-    return triggered;
-  }
-};
-
 // ============ Portfolio History Tracker ============
 const HistoryTracker = {
   STORAGE_KEY: 'portfolio_history',
-  MAX_ENTRIES: 365, // Keep 1 year of daily data
+  MAX_ENTRIES: AppConfig.HISTORY.MAX_ENTRIES,
 
   getAll() {
     try {
@@ -423,34 +683,37 @@ const HistoryTracker = {
   },
 
   record(totalValue, categoryValues) {
-    const history = this.getAll();
-    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    try {
+      const history = this.getAll();
+      const today = new Date().toISOString().split('T')[0];
 
-    // Check if we already have an entry for today
-    const existingIndex = history.findIndex(h => h.date === today);
+      const existingIndex = history.findIndex(h => h.date === today);
 
-    const entry = {
-      date: today,
-      timestamp: Date.now(),
-      total: totalValue,
-      crypto: categoryValues.crypto || 0,
-      stocks: categoryValues.stocks || 0,
-      gold: categoryValues.gold || 0
-    };
+      const entry = {
+        date: today,
+        timestamp: Date.now(),
+        total: totalValue,
+        crypto: categoryValues.crypto || 0,
+        stocks: categoryValues.stocks || 0,
+        gold: categoryValues.gold || 0
+      };
 
-    if (existingIndex !== -1) {
-      history[existingIndex] = entry; // Update today's entry
-    } else {
-      history.push(entry);
+      if (existingIndex !== -1) {
+        history[existingIndex] = entry;
+      } else {
+        history.push(entry);
+      }
+
+      if (history.length > this.MAX_ENTRIES) {
+        history.splice(0, history.length - this.MAX_ENTRIES);
+      }
+
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(history));
+      return entry;
+    } catch (error) {
+      console.error('Failed to record history:', error);
+      return null;
     }
-
-    // Keep only last MAX_ENTRIES
-    if (history.length > this.MAX_ENTRIES) {
-      history.splice(0, history.length - this.MAX_ENTRIES);
-    }
-
-    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(history));
-    return entry;
   },
 
   getRange(days = 30) {
@@ -470,95 +733,138 @@ window.ThemeManager = ThemeManager;
 window.CacheManager = CacheManager;
 window.CurrencyManager = CurrencyManager;
 window.TransactionHistory = TransactionHistory;
-window.WatchlistManager = WatchlistManager;
-window.PriceAlerts = PriceAlerts;
 window.HistoryTracker = HistoryTracker;
+window.BackupManager = BackupManager;
+window.Utils = Utils;
 
+// ============ Main Portfolio Application (Improved) ============
 const PortfolioApp = {
-  // CoinGecko API base URL (free, no API key needed)
-  API_BASE: 'https://api.coingecko.com/api/v3',
+  API_BASE: AppConfig.API.COINGECKO_BASE,
+  GIST_API: AppConfig.API.GITHUB_BASE,
 
-  // GitHub Gist API
-  GIST_API: 'https://api.github.com/gists',
+  STORAGE_KEY: AppConfig.STORAGE.ASSETS_KEY,
+  GIST_ID_KEY: AppConfig.STORAGE.GIST_ID_KEY,
 
-  // Local storage keys
-  STORAGE_KEY: 'portfolio_assets',
-  GIST_ID_KEY: 'portfolio_gist_id',
-  AUTH_TOKEN_KEY: 'portfolio_auth_token',
-
-  // Session auth (cleared on tab close)
   _sessionToken: null,
+  _assetsCache: null,
+  _cacheInvalidated: false,
+  _iconCache: {},
 
-  // Check if authenticated
+  // ============ Authentication ============
   isAuthenticated() {
     return !!this._sessionToken;
   },
 
-  // Set session token (only stored in memory, never in localStorage)
   setSessionToken(token) {
     this._sessionToken = token;
   },
 
-  // Clear session
   logout() {
     this._sessionToken = null;
   },
 
-  // Get Gist ID from localStorage (safe - just an ID, not a secret)
   getGistId() {
     return localStorage.getItem(this.GIST_ID_KEY);
   },
 
-  // Save Gist ID
   setGistId(id) {
     localStorage.setItem(this.GIST_ID_KEY, id);
   },
 
-  // Get all assets from localStorage
+  // ============ Asset Management (Cached) ============
   getAssets() {
-    const data = localStorage.getItem(this.STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
+    if (this._assetsCache && !this._cacheInvalidated) {
+      return Utils.deepClone(this._assetsCache);
+    }
+
+    try {
+      const data = localStorage.getItem(this.STORAGE_KEY);
+      this._assetsCache = data ? JSON.parse(data) : [];
+      this._cacheInvalidated = false;
+      return Utils.deepClone(this._assetsCache);
+    } catch (error) {
+      console.error('Failed to load assets:', error);
+      return [];
+    }
   },
 
-  // Save assets to localStorage
   saveAssets(assets) {
-    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(assets));
+    try {
+      // Validate assets before saving
+      if (!Array.isArray(assets)) {
+        throw new AppError('Invalid assets data', 'VALIDATION_ERROR');
+      }
+
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(assets));
+      this._assetsCache = assets;
+      this._cacheInvalidated = false;
+    } catch (error) {
+      ErrorHandler.handle(
+        new AppError('Failed to save assets', 'STORAGE_ERROR'),
+        'PortfolioApp.saveAssets'
+      );
+    }
   },
 
-  // Add a new asset
+  invalidateCache() {
+    this._cacheInvalidated = true;
+  },
+
   addAsset(asset) {
-    const assets = this.getAssets();
-    asset.id = Date.now().toString();
-    assets.push(asset);
-    this.saveAssets(assets);
-    return asset;
+    try {
+      // Validate asset
+      if (!asset.name || !asset.category) {
+        throw new AppError('Asset name and category are required', 'VALIDATION_ERROR');
+      }
+
+      BackupManager.createBackup('before_add');
+
+      const assets = this.getAssets();
+      asset.id = Date.now().toString();
+      assets.push(asset);
+      this.saveAssets(assets);
+      
+      return asset;
+    } catch (error) {
+      return ErrorHandler.handle(error, 'PortfolioApp.addAsset');
+    }
   },
 
-  // Update an existing asset
   updateAsset(id, updates) {
-    const assets = this.getAssets();
-    const index = assets.findIndex(a => a.id === id);
-    if (index !== -1) {
+    try {
+      BackupManager.createBackup('before_update');
+
+      const assets = this.getAssets();
+      const index = assets.findIndex(a => a.id === id);
+      
+      if (index === -1) {
+        throw new AppError('Asset not found', 'NOT_FOUND');
+      }
+
       assets[index] = { ...assets[index], ...updates };
       this.saveAssets(assets);
       return assets[index];
+    } catch (error) {
+      return ErrorHandler.handle(error, 'PortfolioApp.updateAsset');
     }
-    return null;
   },
 
-  // Delete an asset
   deleteAsset(id) {
-    const assets = this.getAssets();
-    const filtered = assets.filter(a => a.id !== id);
-    this.saveAssets(filtered);
+    try {
+      BackupManager.createBackup('before_delete');
+
+      const assets = this.getAssets();
+      const filtered = assets.filter(a => a.id !== id);
+      this.saveAssets(filtered);
+    } catch (error) {
+      ErrorHandler.handle(error, 'PortfolioApp.deleteAsset');
+    }
   },
 
   // ============ GitHub Gist Sync ============
-
-  // Sync assets to GitHub Gist
   async syncToGist() {
     if (!this._sessionToken) {
-      throw new Error('Not authenticated');
+      throw new AppError('Not authenticated', 'AUTH_ERROR');
     }
 
     const assets = this.getAssets();
@@ -578,7 +884,6 @@ const PortfolioApp = {
       let response;
 
       if (gistId) {
-        // Update existing gist
         response = await fetch(`${this.GIST_API}/${gistId}`, {
           method: 'PATCH',
           headers: {
@@ -588,7 +893,6 @@ const PortfolioApp = {
           body: JSON.stringify(payload)
         });
       } else {
-        // Create new gist
         response = await fetch(this.GIST_API, {
           method: 'POST',
           headers: {
@@ -601,32 +905,29 @@ const PortfolioApp = {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || 'Sync failed');
+        throw new AppError(error.message || 'Sync failed', 'GIST_ERROR');
       }
 
       const data = await response.json();
       this.setGistId(data.id);
       return { success: true, gistId: data.id };
     } catch (error) {
-      console.error('Sync to Gist failed:', error);
-      throw error;
+      throw new AppError(error.message, 'GIST_ERROR');
     }
   },
 
-  // Load assets from GitHub Gist
   async syncFromGist() {
     if (!this._sessionToken) {
-      throw new Error('Not authenticated');
+      throw new AppError('Not authenticated', 'AUTH_ERROR');
     }
 
     let gistId = this.getGistId();
 
-    // If no local Gist ID, search for existing portfolio gist
     if (!gistId) {
       const found = await this.findExistingGist();
       if (found) {
         gistId = found;
-        this.setGistId(gistId); // Save for future use
+        this.setGistId(gistId);
       } else {
         return { success: false, message: 'No portfolio found in your Gists. Push first on another device.' };
       }
@@ -640,13 +941,14 @@ const PortfolioApp = {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch Gist');
+        throw new AppError('Failed to fetch Gist', 'GIST_ERROR');
       }
 
       const data = await response.json();
       const fileContent = data.files['portfolio_data.json']?.content;
 
       if (fileContent) {
+        BackupManager.createBackup('before_sync');
         const assets = JSON.parse(fileContent);
         this.saveAssets(assets);
         return { success: true, count: assets.length };
@@ -654,15 +956,13 @@ const PortfolioApp = {
 
       return { success: false, message: 'No data in Gist' };
     } catch (error) {
-      console.error('Sync from Gist failed:', error);
-      throw error;
+      throw new AppError(error.message, 'GIST_ERROR');
     }
   },
 
-  // Search user's gists for existing portfolio data
   async findExistingGist() {
     try {
-      const response = await fetch(`${this.GIST_API}`, {
+      const response = await fetch(this.GIST_API, {
         headers: {
           'Authorization': `Bearer ${this._sessionToken}`
         }
@@ -672,10 +972,8 @@ const PortfolioApp = {
 
       const gists = await response.json();
 
-      // Find gist with portfolio_data.json file
       for (const gist of gists) {
         if (gist.files && gist.files['portfolio_data.json']) {
-          console.log('Found existing portfolio Gist:', gist.id);
           return gist.id;
         }
       }
@@ -687,7 +985,6 @@ const PortfolioApp = {
     }
   },
 
-  // Validate token by making a test API call
   async validateToken(token) {
     try {
       const response = await fetch('https://api.github.com/user', {
@@ -706,23 +1003,19 @@ const PortfolioApp = {
     }
   },
 
-  // ============ Price Fetching ============
-
-  // Icon cache to avoid re-fetching
-  _iconCache: {},
-
-  // Fetch prices and icons from CoinGecko using markets API
+  // ============ Price Fetching (Rate Limited) ============
   async fetchMarketData(coinIds) {
     if (coinIds.length === 0) return {};
 
     try {
       const ids = coinIds.join(',');
-      const response = await fetch(
-        `${this.API_BASE}/coins/markets?vs_currency=usd&ids=${ids}&sparkline=false`
+      
+      const response = await apiRateLimiter.execute(() =>
+        fetch(`${this.API_BASE}/coins/markets?vs_currency=usd&ids=${ids}&sparkline=false`)
       );
 
       if (!response.ok) {
-        throw new Error('Failed to fetch market data');
+        throw new AppError('Failed to fetch market data', 'API_ERROR');
       }
 
       const data = await response.json();
@@ -733,23 +1026,20 @@ const PortfolioApp = {
           usd: coin.current_price,
           image: coin.image
         };
-        // Cache icons
         this._iconCache[coin.id] = coin.image;
       });
 
       return result;
     } catch (error) {
-      console.error('Error fetching market data:', error);
+      console.error('Market data fetch error:', error);
       return {};
     }
   },
 
-  // Get cached icon for a coin
   getCachedIcon(coingeckoId) {
     return this._iconCache[coingeckoId] || null;
   },
 
-  // Get assets grouped by category
   getAssetsByCategory() {
     const assets = this.getAssets();
     return {
@@ -759,30 +1049,26 @@ const PortfolioApp = {
     };
   },
 
-  // Calculate portfolio values with prices and ROI
+  // ============ Portfolio Calculation ============
   async calculatePortfolio() {
     const assets = this.getAssets();
 
-    // Get unique CoinGecko IDs that need price fetching
     const coinIds = [...new Set(
       assets
         .filter(a => a.coingeckoId && !a.manualPrice)
         .map(a => a.coingeckoId)
     )];
 
-    // Fetch prices and icons from API
     const marketData = await this.fetchMarketData(coinIds);
 
-    // Calculate values for each asset including ROI
     const assetsWithValues = assets.map(asset => {
       let currentPrice = 0;
-      let iconUrl = asset.iconUrl || null; // Use manual icon URL if provided
+      let iconUrl = asset.iconUrl || null;
 
       if (asset.manualPrice) {
         currentPrice = parseFloat(asset.manualPrice);
       } else if (asset.coingeckoId && marketData[asset.coingeckoId]) {
         currentPrice = marketData[asset.coingeckoId].usd;
-        // Use fetched icon if no manual icon set
         if (!iconUrl && marketData[asset.coingeckoId].image) {
           iconUrl = marketData[asset.coingeckoId].image;
         }
@@ -793,130 +1079,7 @@ const PortfolioApp = {
       const buyPrice = parseFloat(asset.buyPrice || 0);
       const costBasis = buyPrice * balance;
 
-      // Calculate profit/loss
       const profitLoss = buyPrice > 0 ? value - costBasis : 0;
       const profitLossPercent = costBasis > 0 ? ((value - costBasis) / costBasis) * 100 : 0;
 
       return {
-        ...asset,
-        currentPrice,
-        value,
-        costBasis,
-        profitLoss,
-        profitLossPercent,
-        iconUrl
-      };
-    });
-
-    // Group by category and calculate totals
-    const categories = {
-      crypto: { assets: [], total: 0, costBasis: 0, profitLoss: 0 },
-      stocks: { assets: [], total: 0, costBasis: 0, profitLoss: 0 },
-      gold: { assets: [], total: 0, costBasis: 0, profitLoss: 0 }
-    };
-
-    let grandTotal = 0;
-    let totalCostBasis = 0;
-    let totalProfitLoss = 0;
-
-    assetsWithValues.forEach(asset => {
-      if (categories[asset.category]) {
-        categories[asset.category].assets.push(asset);
-        categories[asset.category].total += asset.value;
-        categories[asset.category].costBasis += asset.costBasis;
-        categories[asset.category].profitLoss += asset.profitLoss;
-        grandTotal += asset.value;
-        totalCostBasis += asset.costBasis;
-        totalProfitLoss += asset.profitLoss;
-      }
-    });
-
-    // Calculate percentages
-    Object.keys(categories).forEach(cat => {
-      categories[cat].percentage = grandTotal > 0
-        ? (categories[cat].total / grandTotal * 100)
-        : 0;
-
-      categories[cat].profitLossPercent = categories[cat].costBasis > 0
-        ? ((categories[cat].total - categories[cat].costBasis) / categories[cat].costBasis) * 100
-        : 0;
-
-      categories[cat].assets.forEach(asset => {
-        asset.categoryPercentage = categories[cat].total > 0
-          ? (asset.value / categories[cat].total * 100)
-          : 0;
-        asset.portfolioPercentage = grandTotal > 0
-          ? (asset.value / grandTotal * 100)
-          : 0;
-      });
-    });
-
-    const totalProfitLossPercent = totalCostBasis > 0
-      ? ((grandTotal - totalCostBasis) / totalCostBasis) * 100
-      : 0;
-
-    return {
-      categories,
-      grandTotal,
-      totalCostBasis,
-      totalProfitLoss,
-      totalProfitLossPercent,
-      assets: assetsWithValues
-    };
-  },
-
-  // Format currency - with conversion support
-  formatCurrency(value, compact = false) {
-    // Use CurrencyManager if initialized
-    if (typeof CurrencyManager !== 'undefined' && CurrencyManager.current) {
-      return CurrencyManager.format(value, compact);
-    }
-
-    // Fallback to USD
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(value);
-  },
-
-  // Format currency for chart center (always compact for large)
-  formatCurrencyCompact(value) {
-    // Use CurrencyManager if initialized
-    if (typeof CurrencyManager !== 'undefined' && CurrencyManager.current) {
-      return CurrencyManager.format(value, true);
-    }
-
-    // Fallback to USD
-    if (Math.abs(value) >= 1000000) {
-      return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD',
-        notation: 'compact',
-        maximumFractionDigits: 2
-      }).format(value);
-    }
-
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(value);
-  },
-
-  // Format percentage
-  formatPercent(value) {
-    return value.toFixed(1) + '%';
-  },
-
-  // Format profit/loss with color indicator
-  formatProfitLoss(value) {
-    const sign = value >= 0 ? '+' : '';
-    return sign + this.formatCurrency(value);
-  }
-};
-
-// Make it globally available
-window.PortfolioApp = PortfolioApp;
