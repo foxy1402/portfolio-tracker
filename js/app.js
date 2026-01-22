@@ -92,7 +92,7 @@ const ErrorHandler = {
     console.error(`[${context}]`, error);
 
     let userMessage = 'Something went wrong. Please try again.';
-    
+
     if (error.code === 'NETWORK_ERROR') {
       userMessage = 'Network error. Please check your connection.';
     } else if (error.code === 'API_RATE_LIMIT') {
@@ -127,21 +127,21 @@ class RateLimiter {
 
   async processQueue() {
     if (this.processing || this.queue.length === 0) return;
-    
+
     const now = Date.now();
     const timeSinceLastBatch = now - this.lastBatchTime;
-    
+
     if (timeSinceLastBatch < this.perMinute && this.lastBatchTime > 0) {
       const waitTime = this.perMinute - timeSinceLastBatch;
       setTimeout(() => this.processQueue(), waitTime);
       return;
     }
-    
+
     this.processing = true;
     this.lastBatchTime = now;
-    
+
     const batch = this.queue.splice(0, this.maxRequests);
-    
+
     try {
       const results = await Promise.all(
         batch.map(({ fn }) => fn())
@@ -150,9 +150,9 @@ class RateLimiter {
     } catch (error) {
       batch.forEach(({ reject }) => reject(error));
     }
-    
+
     this.processing = false;
-    
+
     if (this.queue.length > 0) {
       setTimeout(() => this.processQueue(), 100);
     }
@@ -173,7 +173,7 @@ const BackupManager = {
     try {
       const backups = this.getBackups();
       const assets = PortfolioApp.getAssets();
-      
+
       backups.unshift({
         timestamp: Date.now(),
         label,
@@ -347,126 +347,7 @@ const CacheManager = {
       const data = localStorage.getItem(this.PRICE_CACHE_KEY);
       return data ? JSON.parse(data) : { prices: {}, timestamp: 0 };
     } catch {
-      return {
-        ...asset,
-        currentPrice,
-        value,
-        costBasis,
-        profitLoss,
-        profitLossPercent,
-        iconUrl
-      };
-    });
-
-    const categories = {
-      crypto: { assets: [], total: 0, costBasis: 0, profitLoss: 0 },
-      stocks: { assets: [], total: 0, costBasis: 0, profitLoss: 0 },
-      gold: { assets: [], total: 0, costBasis: 0, profitLoss: 0 }
-    };
-
-    let grandTotal = 0;
-    let totalCostBasis = 0;
-    let totalProfitLoss = 0;
-
-    assetsWithValues.forEach(asset => {
-      if (categories[asset.category]) {
-        categories[asset.category].assets.push(asset);
-        categories[asset.category].total += asset.value;
-        categories[asset.category].costBasis += asset.costBasis;
-        categories[asset.category].profitLoss += asset.profitLoss;
-        grandTotal += asset.value;
-        totalCostBasis += asset.costBasis;
-        totalProfitLoss += asset.profitLoss;
-      }
-    });
-
-    Object.keys(categories).forEach(cat => {
-      categories[cat].percentage = grandTotal > 0
-        ? (categories[cat].total / grandTotal * 100)
-        : 0;
-
-      categories[cat].profitLossPercent = categories[cat].costBasis > 0
-        ? ((categories[cat].total - categories[cat].costBasis) / categories[cat].costBasis) * 100
-        : 0;
-
-      categories[cat].assets.forEach(asset => {
-        asset.categoryPercentage = categories[cat].total > 0
-          ? (asset.value / categories[cat].total * 100)
-          : 0;
-        asset.portfolioPercentage = grandTotal > 0
-          ? (asset.value / grandTotal * 100)
-          : 0;
-      });
-    });
-
-    const totalProfitLossPercent = totalCostBasis > 0
-      ? ((grandTotal - totalCostBasis) / totalCostBasis) * 100
-      : 0;
-
-    // Record history
-    HistoryTracker.record(grandTotal, {
-      crypto: categories.crypto.total,
-      stocks: categories.stocks.total,
-      gold: categories.gold.total
-    });
-
-    return {
-      categories,
-      grandTotal,
-      totalCostBasis,
-      totalProfitLoss,
-      totalProfitLossPercent,
-      assets: assetsWithValues
-    };
-  },
-
-  // ============ Formatting Functions ============
-  formatCurrency(value, compact = false) {
-    if (typeof CurrencyManager !== 'undefined' && CurrencyManager.current) {
-      return CurrencyManager.format(value, compact);
-    }
-
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(value);
-  },
-
-  formatCurrencyCompact(value) {
-    if (typeof CurrencyManager !== 'undefined' && CurrencyManager.current) {
-      return CurrencyManager.format(value, true);
-    }
-
-    if (Math.abs(value) >= 1000000) {
-      return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD',
-        notation: 'compact',
-        maximumFractionDigits: 2
-      }).format(value);
-    }
-
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(value);
-  },
-
-  formatPercent(value) {
-    return value.toFixed(1) + '%';
-  },
-
-  formatProfitLoss(value) {
-    const sign = value >= 0 ? '+' : '';
-    return sign + this.formatCurrency(value);
-  }
-};
-
-window.PortfolioApp = PortfolioApp; prices: {}, timestamp: 0 };
+      return { prices: {}, timestamp: 0 };
     }
   },
 
@@ -823,7 +704,7 @@ const PortfolioApp = {
       asset.id = Date.now().toString();
       assets.push(asset);
       this.saveAssets(assets);
-      
+
       return asset;
     } catch (error) {
       return ErrorHandler.handle(error, 'PortfolioApp.addAsset');
@@ -836,7 +717,7 @@ const PortfolioApp = {
 
       const assets = this.getAssets();
       const index = assets.findIndex(a => a.id === id);
-      
+
       if (index === -1) {
         throw new AppError('Asset not found', 'NOT_FOUND');
       }
@@ -1009,7 +890,7 @@ const PortfolioApp = {
 
     try {
       const ids = coinIds.join(',');
-      
+
       const response = await apiRateLimiter.execute(() =>
         fetch(`${this.API_BASE}/coins/markets?vs_currency=usd&ids=${ids}&sparkline=false`)
       );
@@ -1083,3 +964,122 @@ const PortfolioApp = {
       const profitLossPercent = costBasis > 0 ? ((value - costBasis) / costBasis) * 100 : 0;
 
       return {
+        ...asset,
+        currentPrice,
+        value,
+        costBasis,
+        profitLoss,
+        profitLossPercent,
+        iconUrl
+      };
+    });
+
+    const categories = {
+      crypto: { assets: [], total: 0, costBasis: 0, profitLoss: 0 },
+      stocks: { assets: [], total: 0, costBasis: 0, profitLoss: 0 },
+      gold: { assets: [], total: 0, costBasis: 0, profitLoss: 0 }
+    };
+
+    let grandTotal = 0;
+    let totalCostBasis = 0;
+    let totalProfitLoss = 0;
+
+    assetsWithValues.forEach(asset => {
+      if (categories[asset.category]) {
+        categories[asset.category].assets.push(asset);
+        categories[asset.category].total += asset.value;
+        categories[asset.category].costBasis += asset.costBasis;
+        categories[asset.category].profitLoss += asset.profitLoss;
+        grandTotal += asset.value;
+        totalCostBasis += asset.costBasis;
+        totalProfitLoss += asset.profitLoss;
+      }
+    });
+
+    Object.keys(categories).forEach(cat => {
+      categories[cat].percentage = grandTotal > 0
+        ? (categories[cat].total / grandTotal * 100)
+        : 0;
+
+      categories[cat].profitLossPercent = categories[cat].costBasis > 0
+        ? ((categories[cat].total - categories[cat].costBasis) / categories[cat].costBasis) * 100
+        : 0;
+
+      categories[cat].assets.forEach(asset => {
+        asset.categoryPercentage = categories[cat].total > 0
+          ? (asset.value / categories[cat].total * 100)
+          : 0;
+        asset.portfolioPercentage = grandTotal > 0
+          ? (asset.value / grandTotal * 100)
+          : 0;
+      });
+    });
+
+    const totalProfitLossPercent = totalCostBasis > 0
+      ? ((grandTotal - totalCostBasis) / totalCostBasis) * 100
+      : 0;
+
+    // Record history
+    HistoryTracker.record(grandTotal, {
+      crypto: categories.crypto.total,
+      stocks: categories.stocks.total,
+      gold: categories.gold.total
+    });
+
+    return {
+      categories,
+      grandTotal,
+      totalCostBasis,
+      totalProfitLoss,
+      totalProfitLossPercent,
+      assets: assetsWithValues
+    };
+  },
+
+  // ============ Formatting Functions ============
+  formatCurrency(value, compact = false) {
+    if (typeof CurrencyManager !== 'undefined' && CurrencyManager.current) {
+      return CurrencyManager.format(value, compact);
+    }
+
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(value);
+  },
+
+  formatCurrencyCompact(value) {
+    if (typeof CurrencyManager !== 'undefined' && CurrencyManager.current) {
+      return CurrencyManager.format(value, true);
+    }
+
+    if (Math.abs(value) >= 1000000) {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        notation: 'compact',
+        maximumFractionDigits: 2
+      }).format(value);
+    }
+
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(value);
+  },
+
+  formatPercent(value) {
+    return value.toFixed(1) + '%';
+  },
+
+  formatProfitLoss(value) {
+    const sign = value >= 0 ? '+' : '';
+    return sign + this.formatCurrency(value);
+  }
+};
+
+window.PortfolioApp = PortfolioApp;
