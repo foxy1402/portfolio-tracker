@@ -313,8 +313,9 @@
 
   <!-- Scripts -->
   <script src="js/app.js"></script>
+  <script src="js/dom-utils.js"></script>
   <!-- Add after js/app.js -->
-	<script src="js/dom-utils.js"></script>
+  <script src="js/dom-utils.js"></script>
   <script src="js/chart.js"></script>
   <script>
     // Dashboard Logic
@@ -411,62 +412,25 @@
       const container = document.getElementById('assetsList');
 
       if (assets.length === 0) {
-        container.innerHTML = `
-          <div class="empty-state">
-            <div class="empty-state-icon">📭</div>
-            <p>No assets yet</p>
-            <p style="font-size: 0.9rem; margin-top: 0.5rem;">
-              <a href="admin.html" style="color: var(--accent-crypto);">Add your first asset</a>
-            </p>
-          </div>
-        `;
+        DOMUtils.showEmptyState(container, 'No assets yet', {
+          text: 'Add your first asset',
+          href: 'admin.html'
+        });
         return;
       }
 
       // Sort by value descending
       const sorted = [...assets].sort((a, b) => b.value - a.value);
 
-      container.innerHTML = sorted.map(asset => {
-        // Build P/L display: % then USD (order: value → % → USD)
-        let pnlHtml = '';
-        if (asset.costBasis > 0) {
-          const isPositive = asset.profitLoss >= 0;
-          const sign = isPositive ? '+' : '';
-          const pnlClass = isPositive ? 'positive' : 'negative';
-          pnlHtml = `
-            <div class="asset-pnl">
-              <span class="profit-badge ${pnlClass}">${sign}${PortfolioApp.formatPercent(asset.profitLossPercent)}</span>
-              <span class="profit-badge ${pnlClass}">${sign}${PortfolioApp.formatCurrency(asset.profitLoss)}</span>
-            </div>
-          `;
-        }
-
-        // Build icon - use fetched/manual icon URL or fallback to symbol
-        let iconHtml;
-        if (asset.iconUrl) {
-          iconHtml = `<img src="${asset.iconUrl}" alt="${asset.symbol}" class="asset-icon-img" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
-                      <div class="asset-icon ${asset.category}" style="display:none;">${asset.symbol ? asset.symbol.substring(0, 2).toUpperCase() : '??'}</div>`;
-        } else {
-          iconHtml = `<div class="asset-icon ${asset.category}">${asset.symbol ? asset.symbol.substring(0, 2).toUpperCase() : '??'}</div>`;
-        }
-
-        return `
-          <div class="asset-item">
-            <div class="asset-info">
-              ${iconHtml}
-              <div>
-                <div class="asset-name">${asset.name}</div>
-                <div class="asset-symbol">${asset.symbol || ''} • ${getCategoryLabel(asset.category)}</div>
-              </div>
-            </div>
-            <div class="asset-value">
-              <div class="asset-price">${PortfolioApp.formatCurrency(asset.value)}</div>
-              ${pnlHtml}
-              <div class="asset-balance">${asset.balance} @ ${PortfolioApp.formatCurrency(asset.currentPrice)}</div>
-            </div>
-          </div>
-        `;
-      }).join('');
+      // Clear and render using safe DOM utils
+      container.innerHTML = '';
+      sorted.forEach(asset => {
+        const item = DOMUtils.createAssetItem(asset, {
+          showValue: true,
+          showPnL: true
+        });
+        container.appendChild(item);
+      });
     }
 
     function getCategoryLabel(category) {

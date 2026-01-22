@@ -648,8 +648,7 @@
 
     <!-- Scripts -->
     <script src="js/app.js"></script>
-	<!-- Add after js/app.js -->
-	<script src="js/dom-utils.js"></script>
+    <script src="js/dom-utils.js"></script>
     <script>
         // Rebalance Calculator Logic
         let portfolioData = null;
@@ -730,35 +729,52 @@
             const totalEl = document.getElementById('totalValue');
 
             if (!portfolioData || portfolioData.grandTotal === 0) {
-                container.innerHTML = `
-                    <div class="no-assets-message" style="grid-column: 1 / -1;">
-                        <p>📭 No assets in your portfolio</p>
-                        <p><a href="admin.html">Add assets first</a> to use the rebalance calculator</p>
-                    </div>
-                `;
+                DOMUtils.showEmptyState(container, 'No assets in your portfolio', {
+                    text: 'Add assets first',
+                    href: 'admin.html'
+                });
+                // Fix grid layout for empty state
+                const emptyState = container.querySelector('.empty-state');
+                if (emptyState) {
+                    emptyState.style.gridColumn = '1 / -1';
+                }
+
                 totalEl.textContent = 'Total Portfolio: $0';
                 return;
             }
 
             const { categories, grandTotal } = portfolioData;
 
-            container.innerHTML = `
-                <div class="allocation-card crypto">
-                    <div class="allocation-label">Crypto</div>
-                    <div class="allocation-value crypto">${PortfolioApp.formatCurrency(categories.crypto.total)}</div>
-                    <div class="allocation-percent">${categories.crypto.percentage.toFixed(1)}%</div>
-                </div>
-                <div class="allocation-card stocks">
-                    <div class="allocation-label">Stocks</div>
-                    <div class="allocation-value stocks">${PortfolioApp.formatCurrency(categories.stocks.total)}</div>
-                    <div class="allocation-percent">${categories.stocks.percentage.toFixed(1)}%</div>
-                </div>
-                <div class="allocation-card gold">
-                    <div class="allocation-label">Gold</div>
-                    <div class="allocation-value gold">${PortfolioApp.formatCurrency(categories.gold.total)}</div>
-                    <div class="allocation-percent">${categories.gold.percentage.toFixed(1)}%</div>
-                </div>
-            `;
+            container.innerHTML = '';
+
+            const cats = ['crypto', 'stocks', 'gold'];
+            const labels = { crypto: 'Crypto', stocks: 'Stocks', gold: 'Gold' };
+
+            cats.forEach(cat => {
+                const card = DOMUtils.createElement('div', {
+                    className: `allocation-card ${cat}`
+                });
+
+                const label = DOMUtils.createElement('div', {
+                    className: 'allocation-label',
+                    text: labels[cat]
+                });
+
+                const value = DOMUtils.createElement('div', {
+                    className: `allocation-value ${cat}`,
+                    text: PortfolioApp.formatCurrency(categories[cat].total)
+                });
+
+                const percent = DOMUtils.createElement('div', {
+                    className: 'allocation-percent',
+                    text: categories[cat].percentage.toFixed(1) + '%'
+                });
+
+                card.appendChild(label);
+                card.appendChild(value);
+                card.appendChild(percent);
+                container.appendChild(card);
+            });
 
             totalEl.textContent = `Total Portfolio: ${PortfolioApp.formatCurrency(grandTotal)}`;
         }
@@ -1084,6 +1100,7 @@
         function renderResults(diffs, assetRecommendations, targets) {
             const resultsSection = document.getElementById('resultsSection');
             const resultsContent = document.getElementById('resultsContent');
+            const summaryGrid = document.getElementById('summaryGrid');
 
             const categoryLabels = {
                 crypto: { emoji: '🪙', name: 'Crypto' },
@@ -1091,7 +1108,7 @@
                 gold: { emoji: '🥇', name: 'Gold' }
             };
 
-            let html = '';
+            resultsContent.innerHTML = '';
 
             ['crypto', 'stocks', 'gold'].forEach(category => {
                 const catAssets = assetRecommendations.filter(a => a.category === category);
@@ -1099,107 +1116,77 @@
                 const { emoji, name } = categoryLabels[category];
 
                 const action = catDiff > 1 ? 'buy' : catDiff < -1 ? 'sell' : 'hold';
-                const actionText = catDiff > 1
-                    ? `Buy ${PortfolioApp.formatCurrency(Math.abs(catDiff))}`
-                    : catDiff < -1
-                        ? `Sell ${PortfolioApp.formatCurrency(Math.abs(catDiff))}`
-                        : 'No change needed';
 
-                html += `
-                    <div class="result-category">
-                        <div class="result-category-header">
-                            <div class="result-category-title">
-                                <span>${emoji}</span>
-                                <span>${name}</span>
-                            </div>
-                            <div class="result-category-action ${action}">${actionText}</div>
-                        </div>
-                `;
+                let actionText = 'No change needed';
+                if (catDiff > 1) {
+                    actionText = `Buy ${PortfolioApp.formatCurrency(Math.abs(catDiff))}`;
+                } else if (catDiff < -1) {
+                    actionText = `Sell ${PortfolioApp.formatCurrency(Math.abs(catDiff))}`;
+                }
 
+                // Create category container
+                const categoryDiv = DOMUtils.createElement('div', {
+                    className: 'result-category'
+                });
+
+                // Header
+                const header = DOMUtils.createElement('div', {
+                    className: 'result-category-header'
+                });
+
+                const title = DOMUtils.createElement('div', {
+                    className: 'result-category-title',
+                    text: `${emoji} ${name}`
+                });
+
+                const actionBadge = DOMUtils.createElement('div', {
+                    className: `result-category-action ${action}`,
+                    text: actionText
+                });
+
+                header.appendChild(title);
+                header.appendChild(actionBadge);
+                categoryDiv.appendChild(header);
+
+                // Assets
                 if (catAssets.length === 0) {
-                    html += `<div class="asset-result"><em style="color: var(--text-muted);">No assets in this category</em></div>`;
+                    const empty = DOMUtils.createElement('div', {
+                        className: 'asset-result',
+                        html: { safe: true, content: '<em style="color: var(--text-muted);">No assets in this category</em>' }
+                    });
+                    categoryDiv.appendChild(empty);
                 } else {
                     catAssets.forEach(asset => {
-                        const actionClass = asset.action;
-                        const actionLabel = asset.action === 'buy'
-                            ? `Buy ${PortfolioApp.formatCurrency(Math.abs(asset.usdChange))}`
-                            : asset.action === 'sell'
-                                ? `Sell ${PortfolioApp.formatCurrency(Math.abs(asset.usdChange))}`
-                                : 'Hold';
-
-                        const amountText = Math.abs(asset.amountChange) > 0.000001
-                            ? `${asset.action === 'buy' ? '+' : ''}${asset.amountChange.toFixed(6)} ${asset.symbol || 'units'}`
-                            : '';
-
-                        // Target info
-                        const targetInfo = asset.targetPercent !== undefined
-                            ? `Target: ${asset.targetPercent.toFixed(0)}% → ${PortfolioApp.formatCurrency(asset.targetValue)}`
-                            : asset.excluded ? 'Not included' : '';
-
-                        // Icon
-                        let iconHtml;
-                        if (asset.iconUrl) {
-                            iconHtml = `<img src="${asset.iconUrl}" alt="${asset.symbol}" onerror="this.style.display='none';this.parentElement.textContent='${asset.symbol ? asset.symbol.substring(0, 2) : '??'}';">`;
-                        } else {
-                            iconHtml = asset.symbol ? asset.symbol.substring(0, 2) : '??';
-                        }
-
-                        html += `
-                            <div class="asset-result ${asset.excluded ? 'excluded' : ''}">
-                                <div class="asset-result-info">
-                                    <div class="asset-result-icon ${category}">${iconHtml}</div>
-                                    <div>
-                                        <div class="asset-result-name">${asset.name} ${asset.excluded ? '<span style="color: var(--text-muted);">(excluded)</span>' : ''}</div>
-                                        <div class="asset-result-details">
-                                            Current: ${asset.balance} ${asset.symbol || ''} (${PortfolioApp.formatCurrency(asset.value)})
-                                            ${targetInfo ? `<br>${targetInfo}` : ''}
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="asset-result-action">
-                                    <div class="action-badge ${actionClass}">${actionLabel}</div>
-                                    ${amountText ? `<div class="action-amount">${amountText}</div>` : ''}
-                                </div>
-                            </div>
-                        `;
+                        const item = DOMUtils.createRebalanceResultItem(asset);
+                        categoryDiv.appendChild(item);
                     });
                 }
 
-                html += '</div>';
+                resultsContent.appendChild(categoryDiv);
             });
 
-            resultsContent.innerHTML = html;
-
-            // Render summary
+            // Render summary safely
             const totalToBuy = assetRecommendations.filter(a => a.usdChange > 0).reduce((sum, a) => sum + a.usdChange, 0);
             const totalToSell = Math.abs(assetRecommendations.filter(a => a.usdChange < 0).reduce((sum, a) => sum + a.usdChange, 0));
 
-            document.getElementById('summaryGrid').innerHTML = `
-                <div class="summary-item">
-                    <div class="summary-item-label">Total to Buy</div>
-                    <div class="summary-item-value positive">${PortfolioApp.formatCurrency(totalToBuy)}</div>
-                </div>
-                <div class="summary-item">
-                    <div class="summary-item-label">Total to Sell</div>
-                    <div class="summary-item-value negative">${PortfolioApp.formatCurrency(totalToSell)}</div>
-                </div>
-                <div class="summary-item">
-                    <div class="summary-item-label">Target Crypto</div>
-                    <div class="summary-item-value">${PortfolioApp.formatCurrency(targets.crypto)}</div>
-                </div>
-                <div class="summary-item">
-                    <div class="summary-item-label">Target Stocks</div>
-                    <div class="summary-item-value">${PortfolioApp.formatCurrency(targets.stocks)}</div>
-                </div>
-                <div class="summary-item">
-                    <div class="summary-item-label">Target Gold</div>
-                    <div class="summary-item-value">${PortfolioApp.formatCurrency(targets.gold)}</div>
-                </div>
-                <div class="summary-item">
-                    <div class="summary-item-label">Portfolio Total</div>
-                    <div class="summary-item-value">${PortfolioApp.formatCurrency(portfolioData.grandTotal)}</div>
-                </div>
-            `;
+            // Helper for summary items
+            const createSummaryItem = (label, value, valueClass = '') => {
+                const item = DOMUtils.createElement('div', { className: 'summary-item' });
+                item.appendChild(DOMUtils.createElement('div', { className: 'summary-item-label', text: label }));
+                item.appendChild(DOMUtils.createElement('div', {
+                    className: `summary-item-value ${valueClass}`,
+                    text: value
+                }));
+                return item;
+            };
+
+            summaryGrid.innerHTML = '';
+            summaryGrid.appendChild(createSummaryItem('Total to Buy', PortfolioApp.formatCurrency(totalToBuy), 'positive'));
+            summaryGrid.appendChild(createSummaryItem('Total to Sell', PortfolioApp.formatCurrency(totalToSell), 'negative'));
+            summaryGrid.appendChild(createSummaryItem('Target Crypto', PortfolioApp.formatCurrency(targets.crypto)));
+            summaryGrid.appendChild(createSummaryItem('Target Stocks', PortfolioApp.formatCurrency(targets.stocks)));
+            summaryGrid.appendChild(createSummaryItem('Target Gold', PortfolioApp.formatCurrency(targets.gold)));
+            summaryGrid.appendChild(createSummaryItem('Portfolio Total', PortfolioApp.formatCurrency(portfolioData.grandTotal)));
 
             resultsSection.style.display = 'block';
             resultsSection.scrollIntoView({ behavior: 'smooth' });

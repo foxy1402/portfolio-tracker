@@ -347,8 +347,7 @@
 
     <!-- Scripts -->
     <script src="js/app.js"></script>
-	<!-- Add after js/app.js -->
-	<script src="js/dom-utils.js"></script>
+    <script src="js/dom-utils.js"></script>
     <script>
         // Admin Page Logic - Enhanced
         let selectedCategory = 'crypto';
@@ -672,26 +671,45 @@
             const transactions = TransactionHistory.getAll().slice(0, 20);
 
             if (transactions.length === 0) {
-                container.innerHTML = `
-                    <p style="color: var(--text-muted); text-align: center; padding: 1rem;">
-                        No transactions yet.
-                    </p>
-                `;
+                DOMUtils.showEmptyState(container, 'No transactions yet');
                 return;
             }
 
-            container.innerHTML = transactions.map(tx => `
-                <div class="transaction-item">
-                    <div>
-                        <span class="transaction-type ${tx.type}">${tx.type}</span>
-                        <span style="margin-left: 8px;">${tx.assetName}</span>
-                    </div>
-                    <div style="text-align: right;">
-                        <div>${tx.amount} units</div>
-                        <div class="transaction-date">${new Date(tx.timestamp).toLocaleDateString()}</div>
-                    </div>
-                </div>
-            `).join('');
+            container.innerHTML = '';
+            transactions.forEach(tx => {
+                const item = DOMUtils.createElement('div', {
+                    className: 'transaction-item'
+                });
+
+                const left = DOMUtils.createElement('div');
+                const typeSpan = DOMUtils.createElement('span', {
+                    className: `transaction-type ${tx.type}`,
+                    text: tx.type
+                });
+                const nameSpan = DOMUtils.createElement('span', {
+                    text: tx.assetName,
+                    styles: { marginLeft: '8px' }
+                });
+                left.appendChild(typeSpan);
+                left.appendChild(nameSpan);
+
+                const right = DOMUtils.createElement('div', {
+                    styles: { textAlign: 'right' }
+                });
+                const amountDiv = DOMUtils.createElement('div', {
+                    text: `${tx.amount} units`
+                });
+                const dateDiv = DOMUtils.createElement('div', {
+                    className: 'transaction-date',
+                    text: new Date(tx.timestamp).toLocaleDateString()
+                });
+                right.appendChild(amountDiv);
+                right.appendChild(dateDiv);
+
+                item.appendChild(left);
+                item.appendChild(right);
+                container.appendChild(item);
+            });
         }
 
         // ============ Render Assets ============
@@ -700,12 +718,7 @@
             const assets = PortfolioApp.getAssets();
 
             if (assets.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon">📭</div>
-                        <p>No assets added yet</p>
-                    </div>
-                `;
+                DOMUtils.showEmptyState(container, 'No assets added yet');
                 return;
             }
 
@@ -721,48 +734,28 @@
                 gold: '🥇 Gold'
             };
 
-            let html = '';
+            container.innerHTML = '';
 
             Object.entries(grouped).forEach(([cat, catAssets]) => {
                 if (catAssets.length === 0) return;
 
-                html += `<h4 style="color: var(--accent-${cat}); margin: 1rem 0 0.5rem;">${categoryLabels[cat]}</h4>`;
+                const header = DOMUtils.createElement('h4', {
+                    text: categoryLabels[cat],
+                    styles: {
+                        color: `var(--accent-${cat})`,
+                        margin: '1rem 0 0.5rem'
+                    }
+                });
+                container.appendChild(header);
 
                 catAssets.forEach(asset => {
-                    const buyPriceInfo = asset.buyPrice ? `Buy: $${asset.buyPrice}` : 'No buy price';
-                    const notesIcon = asset.notes ? '📝' : '';
-                    html += `
-                        <div class="admin-asset-item">
-                            <div class="asset-info">
-                                <div class="asset-icon ${asset.category}">
-                                    ${asset.symbol ? asset.symbol.substring(0, 2) : '??'}
-                                </div>
-                                <div>
-                                    <div class="asset-name">${asset.name} ${notesIcon}</div>
-                                    <div class="asset-symbol">
-                                        ${asset.symbol || ''} 
-                                        ${asset.coingeckoId ? `• API: ${asset.coingeckoId}` : ''}
-                                        ${asset.manualPrice ? `• Manual: $${asset.manualPrice}` : ''}
-                                    </div>
-                                    <div class="asset-balance" style="margin-top: 4px;">
-                                        Balance: ${asset.balance} • ${buyPriceInfo}
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="admin-asset-actions">
-                                <button class="btn btn-secondary btn-icon" onclick="editAsset('${asset.id}')" title="Edit">
-                                    ✏️
-                                </button>
-                                <button class="btn btn-danger btn-icon" onclick="deleteAsset('${asset.id}')" title="Delete">
-                                    🗑️
-                                </button>
-                            </div>
-                        </div>
-                    `;
+                    const item = DOMUtils.createAdminAssetItem(asset, {
+                        onEdit: editAsset,
+                        onDelete: deleteAsset
+                    });
+                    container.appendChild(item);
                 });
             });
-
-            container.innerHTML = html;
         }
 
         // Initialize on load
