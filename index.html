@@ -273,11 +273,7 @@
         </div>
       </div>
 
-      <!-- Mobile Section Header for Assets -->
-      <div class="mobile-section-header" id="mobileAssetsHeader">
-        <span class="mobile-section-title">Your Assets</span>
-        <a href="admin.html" class="mobile-section-action">Manage →</a>
-      </div>
+
 
       <!-- Stats Overview (Desktop Only) -->
       <div class="stats-grid fade-in" id="statsGrid">
@@ -397,8 +393,11 @@
         <div class="card fade-in" id="assetsSection">
           <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
             Your Assets
-            <span id="portfolioPlainValue"
-              style="font-size: 1rem; color: var(--text-secondary); font-weight: 500;">$0</span>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <span id="portfolioPlainValue"
+                style="font-size: 1rem; color: var(--text-secondary); font-weight: 500;">$0</span>
+              <a href="admin.html" class="mobile-section-action">Manage →</a>
+            </div>
           </div>
 
           <!-- Assets Header Row (Mobile) -->

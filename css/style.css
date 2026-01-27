@@ -336,6 +336,24 @@ body.mobile-mode .asset-item {
   border-radius: 0;
 }
 
+/* Force fixed column widths for mobile alignment */
+body.mobile-mode .asset-col-left {
+  flex: 1 !important;
+  min-width: 0;
+}
+
+body.mobile-mode .asset-col-mid {
+  flex: 0 0 85px !important;
+  /* Fixed width for PnL */
+  align-items: flex-end !important;
+}
+
+body.mobile-mode .asset-col-right {
+  flex: 0 0 90px !important;
+  /* Fixed width for Price */
+  align-items: flex-end !important;
+}
+
 body.mobile-mode .asset-item:hover {
   background: transparent;
 }
@@ -1681,6 +1699,7 @@ body.mobile-mode .hero-section {
 /* Mobile Category Pills */
 .mobile-category-pills {
   display: flex;
+  justify-content: center;
   gap: 8px;
   overflow-x: auto;
   padding: 4px 0;
@@ -1774,11 +1793,18 @@ body.mobile-mode .mobile-section-header {
   color: var(--text-primary);
 }
 
+/* Mobile Section Action (Manage Link) - Hidden by default on desktop */
 .mobile-section-action {
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   color: var(--accent-crypto);
   text-decoration: none;
   font-weight: 500;
+  display: none;
+  /* Hide on desktop */
+}
+
+.mobile-section-action:hover {
+  text-decoration: underline;
 }
 
 /* Mobile Asset Item Redesign */
@@ -1924,8 +1950,17 @@ body.mobile-mode .card:hover {
   box-shadow: none;
 }
 
+body.mobile-mode .mobile-section-action {
+  display: inline-block;
+  /* Show on mobile */
+}
+
 body.mobile-mode .card-title {
-  display: none;
+  display: flex !important;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-sm);
+  font-size: 1rem;
 }
 
 body.mobile-mode #chartSection {
@@ -1955,6 +1990,7 @@ body.mobile-mode #totalProfitContainer {
 
 body.mobile-mode #portfolioPlainValue {
   display: none !important;
+  /* Hide on mobile */
 }
 
 /* Mobile Header Bar */
