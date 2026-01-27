@@ -1656,6 +1656,7 @@ body.mobile-mode .hero-section {
   height: 120px;
   margin: 16px 0;
   flex-shrink: 0;
+  position: relative;
 }
 
 .mobile-hero-chart canvas {
@@ -2077,4 +2078,47 @@ body.mobile-mode .mobile-fab {
 
 .mobile-fab:active {
   transform: scale(0.95);
+}
+
+/* Loading dots animation */
+.loading-dots::after {
+  content: '';
+  animation: loadingDots 1.5s infinite;
+}
+
+@keyframes loadingDots {
+
+  0%,
+  20% {
+    content: '.';
+  }
+
+  40% {
+    content: '..';
+  }
+
+  60%,
+  100% {
+    content: '...';
+  }
+}
+
+.mobile-chart-loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  background: rgba(10, 10, 15, 0.85);
+  padding: 8px 16px;
+  border-radius: 20px;
+  backdrop-filter: blur(4px);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--bg-card);
 }

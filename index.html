@@ -237,15 +237,18 @@
         </div>
         <div class="mobile-hero-chart">
           <canvas id="heroMiniChart"></canvas>
+          <div id="mobileChartLoading" class="mobile-chart-loading" style="display: none;">
+            <span class="loading-dots">Loading</span>
+          </div>
         </div>
         <div class="mobile-timeframe-selector">
-          <button class="timeframe-btn active">24H</button>
-          <button class="timeframe-btn">1W</button>
-          <button class="timeframe-btn">1M</button>
-          <button class="timeframe-btn">3M</button>
-          <button class="timeframe-btn">6M</button>
-          <button class="timeframe-btn">1Y</button>
-          <button class="timeframe-btn">ALL</button>
+          <button class="timeframe-btn active" onclick="updateHistoryChart(1)">24H</button>
+          <button class="timeframe-btn" onclick="updateHistoryChart(7)">1W</button>
+          <button class="timeframe-btn" onclick="updateHistoryChart(30)">1M</button>
+          <button class="timeframe-btn" onclick="updateHistoryChart(90)">3M</button>
+          <button class="timeframe-btn" onclick="updateHistoryChart(180)">6M</button>
+          <button class="timeframe-btn" onclick="updateHistoryChart(365)">1Y</button>
+          <button class="timeframe-btn" onclick="updateHistoryChart(0)">ALL</button>
         </div>
         <!-- Category Pills -->
         <div class="mobile-category-pills" id="categoryPills">
@@ -623,6 +626,18 @@
           document.getElementById('chartSection').style.display = '';
           document.getElementById('assetsSection').style.display = '';
         }
+
+        // Redraw charts after layout change
+        setTimeout(() => {
+          if (typeof chartData !== 'undefined' && chartData.length > 0) {
+            drawMiniChart(chartData, 'heroMiniChart');
+            drawEnhancedLineChart(chartData, 'historyChart');
+          }
+          if (window.portfolioChart) {
+            window.portfolioChart.setupCanvas();
+            window.portfolioChart.draw();
+          }
+        }, 50);
       };
 
       if (saved === 'true') {
@@ -739,70 +754,131 @@
     let chartCanvas = null;
     let chartCtx = null;
 
-    function updateHistoryChart(days) {
-      // Update active button
+    let currentPeriodDays = 7;
+    // chartData is reused
+
+    async function updateHistoryChart(days) {
+      currentPeriodDays = days;
+
+      // Update active button (Desktop)
       document.querySelectorAll('.period-btn').forEach(btn => {
         btn.classList.remove('active');
-        if (btn.getAttribute('onclick')?.includes(`(${days})`)) {
+        const btnDays = parseInt(btn.dataset.days);
+        if (btnDays === days || (days === 0 && btnDays === 0)) {
           btn.classList.add('active');
         }
       });
 
-      // Get history data
-      const history = HistoryTracker.getAll();
-      const filtered = days === 0 ? history : history.slice(-days);
+      // Update active button (Mobile)
+      document.querySelectorAll('.timeframe-btn').forEach(btn => {
+        let btnDays = 7; // default 1W
+        const text = btn.textContent;
+        if (text === '24H') btnDays = 1;
+        else if (text === '1W') btnDays = 7;
+        else if (text === '1M') btnDays = 30;
+        else if (text === '3M') btnDays = 90;
+        else if (text === '6M') btnDays = 180;
+        else if (text === '1Y') btnDays = 365;
+        else if (text === 'ALL') btnDays = 0;
 
-      if (filtered.length < 2) {
-        document.getElementById('historyEmpty').style.display = 'block';
-        document.getElementById('chartStats').style.display = 'none';
-        const canvas = document.getElementById('historyChart');
-        if (canvas) {
-          const ctx = canvas.getContext('2d');
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (btnDays === days) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
         }
-        return;
+      });
+
+      // Show loading state
+      const historyEmpty = document.getElementById('historyEmpty');
+      const chartStats = document.getElementById('chartStats');
+
+      if (historyEmpty) {
+        historyEmpty.innerHTML = '<div class="loading"><span class="loading-dots">Loading historical data</span></div>';
+        historyEmpty.style.display = 'block';
+        historyEmpty.style.padding = '40px';
+        historyEmpty.style.textAlign = 'center';
       }
+      if (chartStats) chartStats.style.display = 'none';
 
-      document.getElementById('historyEmpty').style.display = 'none';
-      document.getElementById('chartStats').style.display = 'flex';
+      // Determine API days parameter (CoinGecko uses 'max' for all time)
+      const apiDays = days === 0 ? 'max' : days;
 
-      // Store data for tooltip interactions
-      chartData = filtered;
+      try {
+        // Fetch historical data from CoinGecko
+        const performance = await HistoricalPriceAPI.calculatePerformance(apiDays);
 
-      // Calculate stats
-      const values = filtered.map(d => d.total);
-      const high = Math.max(...values);
-      const low = Math.min(...values);
-      const avg = values.reduce((a, b) => a + b, 0) / values.length;
-      const change = values.length > 1 ? values[values.length - 1] - values[0] : 0;
-      const changePercent = values[0] > 0 ? (change / values[0]) * 100 : 0;
+        if (!performance || !performance.history || performance.history.length < 2) {
+          // Fallback to local history if API fails or returns no data
+          console.warn('Using local history fallback');
+          const localHistory = HistoryTracker.getRange(days);
+          if (localHistory.length > 1) {
+            drawEnhancedLineChart(localHistory, 'historyChart');
+            drawMiniChart(localHistory, 'heroMiniChart');
+            if (historyEmpty) historyEmpty.style.display = 'none';
+            if (chartStats) chartStats.style.display = 'flex';
+            return;
+          }
 
-      // Update stats display
-      document.getElementById('statHigh').textContent = PortfolioApp.formatCurrencyCompact(high);
-      document.getElementById('statLow').textContent = PortfolioApp.formatCurrencyCompact(low);
-      document.getElementById('statAvg').textContent = PortfolioApp.formatCurrencyCompact(avg);
+          if (historyEmpty) {
+            historyEmpty.innerHTML = `
+              <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+                <div style="font-size: 2rem; margin-bottom: 8px;">📊</div>
+                <div>Not enough data available</div>
+                <div style="font-size: 0.8rem; margin-top: 4px;">
+                  ${performance && performance.dataPoints === 1 ? 'Only 1 data point found' : 'No historical data found'}
+                </div>
+              </div>
+            `;
+            historyEmpty.style.display = 'block';
+          }
+          if (chartStats) chartStats.style.display = 'none';
+          return;
+        }
 
-      const statChangeEl = document.getElementById('statChange');
-      const isPositive = change >= 0;
-      statChangeEl.textContent = `${isPositive ? '+' : ''}${changePercent.toFixed(1)}%`;
-      statChangeEl.style.color = isPositive ? 'var(--profit-text)' : 'var(--loss-text)';
+        if (historyEmpty) historyEmpty.style.display = 'none';
+        if (chartStats) chartStats.style.display = 'flex';
 
-      // Update performance header
-      const perfChange = document.getElementById('perfChange');
-      const perfChangeIcon = document.getElementById('perfChangeIcon');
-      const perfChangeValue = document.getElementById('perfChangeValue');
+        // Store data globally for tooltip
+        chartData = performance.history;
 
-      if (perfChange) {
-        perfChange.className = `performance-change ${isPositive ? 'positive' : 'negative'}`;
-        perfChangeIcon.textContent = isPositive ? '↑' : '↓';
-        perfChangeValue.textContent = `${isPositive ? '+' : ''}${changePercent.toFixed(1)}%`;
+        // Update stats display
+        document.getElementById('statHigh').textContent = PortfolioApp.formatCurrencyCompact(performance.high);
+        document.getElementById('statLow').textContent = PortfolioApp.formatCurrencyCompact(performance.low);
+        document.getElementById('statAvg').textContent = PortfolioApp.formatCurrencyCompact(performance.avg);
+
+        const statChangeEl = document.getElementById('statChange');
+        const isPositive = performance.change >= 0;
+        statChangeEl.textContent = `${isPositive ? '+' : ''}${performance.changePercent.toFixed(1)}%`;
+        statChangeEl.style.color = isPositive ? 'var(--profit-text)' : 'var(--loss-text)';
+
+        // Update performance header
+        const perfChange = document.getElementById('perfChange');
+        const perfChangeIcon = document.getElementById('perfChangeIcon');
+        const perfChangeValue = document.getElementById('perfChangeValue');
+
+        if (perfChange) {
+          perfChange.className = `performance-change ${isPositive ? 'positive' : 'negative'}`;
+          perfChangeIcon.textContent = isPositive ? '↑' : '↓';
+          perfChangeValue.textContent = `${isPositive ? '+' : ''}${performance.changePercent.toFixed(1)}%`;
+        }
+
+        // Draw charts
+        drawEnhancedLineChart(performance.history, 'historyChart');
+        drawMiniChart(performance.history, 'heroMiniChart');
+
+      } catch (error) {
+        console.error('Error loading historical data:', error);
+        if (historyEmpty) {
+          historyEmpty.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+              <div style="font-size: 2rem; margin-bottom: 8px;">⚠️</div>
+              <div>Failed to load historical data</div>
+            </div>
+          `;
+          historyEmpty.style.display = 'block';
+        }
+        if (chartStats) chartStats.style.display = 'none';
       }
-
-      // Draw main chart
-      drawEnhancedLineChart(filtered, 'historyChart');
-
-      // Draw mini chart in hero
-      drawMiniChart(filtered, 'heroMiniChart');
     }
 
     function drawEnhancedLineChart(data, canvasId) {
@@ -1049,10 +1125,12 @@
       updateHistoryChart(7);
 
       // Handle resize for line charts
+      // Handle resize for line charts
       window.addEventListener('resize', () => {
-        const activeBtn = document.querySelector('.period-btn.active');
-        const days = activeBtn ? parseInt(activeBtn.dataset.days) : 7;
-        updateHistoryChart(days);
+        if (chartData && chartData.length > 0) {
+          drawEnhancedLineChart(chartData, 'historyChart');
+          drawMiniChart(chartData, 'heroMiniChart');
+        }
       });
 
       // Register Service Worker

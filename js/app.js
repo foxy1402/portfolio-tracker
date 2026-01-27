@@ -608,6 +608,175 @@ const HistoryTracker = {
   }
 };
 
+// ============ CoinGecko Historical Price API ============
+const HistoricalPriceAPI = {
+  CACHE_KEY: 'portfolio_historical_cache',
+  CACHE_DURATION: 60 * 60 * 1000, // 1 hour
+
+  getCache() {
+    try {
+      const data = localStorage.getItem(this.CACHE_KEY);
+      if (!data) return {};
+      const parsed = JSON.parse(data);
+      // Return only non-expired caches
+      const now = Date.now();
+      const valid = {};
+      Object.keys(parsed).forEach(key => {
+        if (parsed[key].timestamp && (now - parsed[key].timestamp < this.CACHE_DURATION)) {
+          valid[key] = parsed[key];
+        }
+      });
+      return valid;
+    } catch {
+      return {};
+    }
+  },
+
+  setCache(key, data) {
+    try {
+      const cache = this.getCache();
+      cache[key] = {
+        data,
+        timestamp: Date.now()
+      };
+      localStorage.setItem(this.CACHE_KEY, JSON.stringify(cache));
+    } catch (error) {
+      console.warn('Cache storage failed:', error);
+    }
+  },
+
+  async fetchHistoricalPrices(coingeckoId, days) {
+    const cacheKey = `${coingeckoId}_${days}`;
+    const cache = this.getCache();
+
+    // Return cached data if available
+    if (cache[cacheKey]) {
+      console.log(`Using cached data for ${coingeckoId} (${days} days)`);
+      return cache[cacheKey].data;
+    }
+
+    try {
+      console.log(`Fetching historical data for ${coingeckoId} (${days} days)...`);
+
+      const response = await apiRateLimiter.execute(() =>
+        fetch(`${AppConfig.API.COINGECKO_BASE.replace('/api/v3', '')}/api/v3/coins/${coingeckoId}/market_chart?vs_currency=usd&days=${days}`)
+      );
+
+      if (!response.ok) {
+        throw new Error(`API returned ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // Transform data
+      const transformed = data.prices.map(([timestamp, price]) => ({
+        date: new Date(timestamp).toISOString().split('T')[0],
+        timestamp,
+        price
+      }));
+
+      // Cache the result
+      this.setCache(cacheKey, transformed);
+
+      return transformed;
+    } catch (error) {
+      console.error(`Failed to fetch historical data for ${coingeckoId}:`, error);
+      return null;
+    }
+  },
+
+  async calculatePortfolioHistory(days = 30) {
+    const assets = PortfolioApp.getAssets();
+
+    // Filter assets with CoinGecko IDs
+    const trackedAssets = assets.filter(a => a.coingeckoId);
+
+    if (trackedAssets.length === 0) {
+      console.warn('No assets with CoinGecko IDs found');
+      return null;
+    }
+
+    console.log(`Calculating portfolio history for ${trackedAssets.length} assets over ${days} days`);
+
+    // Fetch historical prices for all assets (rate-limited)
+    const promises = trackedAssets.map(asset =>
+      this.fetchHistoricalPrices(asset.coingeckoId, days)
+        .then(priceHistory => ({ asset, priceHistory }))
+    );
+
+    const results = await Promise.all(promises);
+
+    // Build date-indexed portfolio values
+    const portfolioByDate = {};
+
+    results.forEach(({ asset, priceHistory }) => {
+      if (!priceHistory) return;
+
+      const balance = parseFloat(asset.balance || 0);
+
+      priceHistory.forEach(({ date, timestamp, price }) => {
+        if (!portfolioByDate[date]) {
+          portfolioByDate[date] = {
+            date,
+            timestamp,
+            total: 0,
+            crypto: 0,
+            stocks: 0,
+            gold: 0,
+            breakdown: {}
+          };
+        }
+
+        const value = price * balance;
+        portfolioByDate[date].total += value;
+        portfolioByDate[date][asset.category] += value;
+        portfolioByDate[date].breakdown[asset.id] = value;
+      });
+    });
+
+    // Convert to sorted array
+    const history = Object.values(portfolioByDate).sort((a, b) =>
+      new Date(a.date) - new Date(b.date)
+    );
+
+    console.log(`Portfolio history calculated: ${history.length} data points`);
+
+    return history;
+  },
+
+  async calculatePerformance(days = 30) {
+    const history = await this.calculatePortfolioHistory(days);
+
+    if (!history || history.length < 2) {
+      return null;
+    }
+
+    const oldest = history[0].total;
+    const newest = history[history.length - 1].total;
+    const change = newest - oldest;
+    const changePercent = oldest > 0 ? (change / oldest) * 100 : 0;
+
+    const values = history.map(h => h.total);
+    const high = Math.max(...values);
+    const low = Math.min(...values);
+    const avg = values.reduce((a, b) => a + b, 0) / values.length;
+
+    return {
+      oldest,
+      newest,
+      change,
+      changePercent,
+      high,
+      low,
+      avg,
+      dataPoints: history.length,
+      history
+    };
+  }
+};
+
+window.HistoricalPriceAPI = HistoricalPriceAPI;
+
 // Make managers globally available
 window.ToastManager = ToastManager;
 window.ThemeManager = ThemeManager;
