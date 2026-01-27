@@ -451,6 +451,7 @@
     async function initDashboard() {
       // Initialize chart
       chart = new PortfolioChart('portfolioChart', 'chartTooltip');
+      window.portfolioChart = chart;
 
       // Add legend click listeners
       document.querySelectorAll('.legend-item').forEach(item => {
@@ -658,6 +659,7 @@
       switch (view) {
         case 'assets':
           assetsSection.style.display = 'block';
+          chartSection.style.display = 'none'; // Explicitly hide chart
           if (mobileAssetsHeader) mobileAssetsHeader.style.display = 'flex';
           break;
         case 'chart':
@@ -665,6 +667,14 @@
           chartSection.style.display = 'block';
           // Hide performance section in chart view
           if (performanceSection) performanceSection.style.display = 'none';
+
+          // Trigger chart resize after display/visible
+          setTimeout(() => {
+            if (window.portfolioChart) {
+              window.portfolioChart.setupCanvas();
+              window.portfolioChart.draw();
+            }
+          }, 50);
           break;
 
       }
@@ -848,20 +858,22 @@
       ctx.closePath();
 
       const gradient = ctx.createLinearGradient(0, padding.top, 0, height - padding.bottom);
-      const isPositive = values[values.length - 1] >= values[0];
-      if (isPositive) {
-        gradient.addColorStop(0, 'rgba(0, 212, 170, 0.3)');
-        gradient.addColorStop(1, 'rgba(0, 212, 170, 0)');
-      } else {
-        gradient.addColorStop(0, 'rgba(255, 80, 80, 0.3)');
-        gradient.addColorStop(1, 'rgba(255, 80, 80, 0)');
-      }
+      // Use a generic gradient fill that matches the line (Violet base)
+      gradient.addColorStop(0, 'rgba(138, 43, 226, 0.15)'); // Violet low opacity
+      gradient.addColorStop(1, 'rgba(138, 43, 226, 0)');
+
       ctx.fillStyle = gradient;
       ctx.fill();
 
       // Draw line
+      // Create Line Gradient (Salmon to Violet)
+      const lineGradient = ctx.createLinearGradient(0, 0, width, 0);
+      lineGradient.addColorStop(0, '#ff9a9e'); // Salmon
+      lineGradient.addColorStop(1, '#8a2be2'); // Violet
+
       ctx.beginPath();
-      ctx.strokeStyle = isPositive ? '#00d4aa' : '#ff5050';
+      // Use the gradient for the line
+      ctx.strokeStyle = lineGradient;
       ctx.lineWidth = 2.5;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
@@ -876,7 +888,7 @@
         if (i === 0 || i === points.length - 1 || data.length <= 14) {
           ctx.beginPath();
           ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
-          ctx.fillStyle = isPositive ? '#00d4aa' : '#ff5050';
+          ctx.fillStyle = lineGradient; // Use same gradient for points
           ctx.fill();
           ctx.strokeStyle = 'var(--bg-primary)';
           ctx.lineWidth = 2;
@@ -977,8 +989,12 @@
       const isPositive = values[values.length - 1] >= values[0];
 
       // Draw line
+      const lineGradient = ctx.createLinearGradient(0, 0, width, 0);
+      lineGradient.addColorStop(0, '#ff9a9e'); // Salmon
+      lineGradient.addColorStop(1, '#8a2be2'); // Violet
+
       ctx.beginPath();
-      ctx.strokeStyle = isPositive ? '#00d4aa' : '#ff5050';
+      ctx.strokeStyle = lineGradient;
       ctx.lineWidth = 2;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
@@ -998,7 +1014,8 @@
       ctx.closePath();
 
       const gradient = ctx.createLinearGradient(0, 0, 0, height);
-      gradient.addColorStop(0, isPositive ? 'rgba(0, 212, 170, 0.3)' : 'rgba(255, 80, 80, 0.3)');
+      // Neutral Violet Fill
+      gradient.addColorStop(0, 'rgba(138, 43, 226, 0.1)');
       gradient.addColorStop(1, 'transparent');
       ctx.fillStyle = gradient;
       ctx.fill();
