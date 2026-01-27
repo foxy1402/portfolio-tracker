@@ -203,7 +203,34 @@
 
     <!-- Main Dashboard -->
     <main>
-      <!-- Stats Overview -->
+      <!-- Mobile Hero Section (Hidden on Desktop) -->
+      <div class="hero-section" id="heroSection" style="position: relative; overflow: hidden;">
+        <div id="heroChartContainer"
+          style="position: absolute; bottom: 0; left: 0; width: 100%; height: 80px; z-index: 0; opacity: 0.6; pointer-events: none;">
+          <canvas id="heroChart"></canvas>
+        </div>
+        <div style="position: relative; z-index: 1;">
+          <div class="hero-label">Total Portfolio Value</div>
+          <div class="hero-value" id="heroTotalValue">$0</div>
+
+          <div class="pnl-cards">
+            <div class="pnl-card" id="heroPnlCard">
+              <div class="pnl-amount" id="heroPnlAmount">$0</div>
+              <div class="pnl-percent" id="heroPnlPercent">0%</div>
+            </div>
+            <!-- You could add a second card for 24h vs All time if data exists, 
+               but for now we stick to one or split PnL $ and % as per guide -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Mobile Tab Navigation (Hidden on Desktop) -->
+      <div class="tab-nav" id="tabNav">
+        <button class="tab-btn active" data-tab="assetsSection">Assets</button>
+        <button class="tab-btn" data-tab="chartSection">Distribution</button>
+      </div>
+
+      <!-- Stats Overview (Desktop Only) -->
       <div class="stats-grid fade-in" id="statsGrid">
         <div class="stat-card crypto">
           <div class="stat-label">Crypto</div>
@@ -227,39 +254,45 @@
 
       <!-- Chart and Assets Grid -->
       <div class="dashboard-grid">
-        <!-- Chart Card -->
-        <div class="card fade-in" id="chartSection">
+        <!-- Assets List Card -->
+        <div class="card fade-in" id="assetsSection">
           <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
-            Portfolio Distribution
-            <button class="refresh-btn" id="refreshBtn" title="Refresh Prices">🔄</button>
+            Your Assets
+            <span id="portfolioPlainValue"
+              style="font-size: 1rem; color: var(--text-secondary); font-weight: 500;">$0</span>
           </div>
-          <div class="chart-container">
-            <div class="chart-wrapper">
-              <canvas id="portfolioChart"></canvas>
-              <div class="chart-center">
-                <div class="chart-total-label">Total Value</div>
-                <div class="chart-total-value" id="totalValue">$0</div>
-              </div>
+
+          <!-- Assets Header Row (Mobile) -->
+          <div class="assets-header"
+            style="display: none; padding: 8px 16px; border-bottom: 1px solid var(--border-color); font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase;">
+            <div style="flex: 1.5; display: flex; align-items: center; gap: 4px;">
+              <span>▼</span> Qty. Total
             </div>
-            <div class="legend">
-              <div class="legend-item" data-category="crypto">
-                <span class="legend-color crypto"></span>
-                <span class="legend-label">Crypto</span>
-              </div>
-              <div class="legend-item" data-category="stocks">
-                <span class="legend-color stocks"></span>
-                <span class="legend-label">Stocks</span>
-              </div>
-              <div class="legend-item" data-category="gold">
-                <span class="legend-color gold"></span>
-                <span class="legend-label">Gold</span>
-              </div>
+            <div style="flex: 1.2; text-align: right; padding-right: 12px;">Unrealized</div>
+            <div style="flex: 0.8; text-align: right;">Price</div>
+          </div>
+
+          <div class="legend">
+            <div class="legend-item" data-category="crypto">
+              <span class="legend-color crypto"></span>
+              <span class="legend-label">Crypto</span>
             </div>
-            <!-- Total Profit/Loss -->
-            <div class="total-profit" id="totalProfitContainer" style="display: none;">
-              <div class="total-profit-label">Total P/L</div>
-              <div class="total-profit-value" id="totalProfitValue">$0</div>
+            <div class="legend-item" data-category="stocks">
+              <span class="legend-color stocks"></span>
+              <span class="legend-label">Stocks</span>
             </div>
+            <div class="legend-item" data-category="gold">
+              <span class="legend-color gold"></span>
+              <span class="legend-label">Gold</span>
+            </div>
+          </div>
+          <!-- Total Profit/Loss -->
+          <div class="total-profit" id="totalProfitContainer" style="display: none;">
+            <div class="total-profit-label">Total P/L</div>
+            <div class="total-profit-value" id="totalProfitValue">$0</div>
+          </div>
+
+          <div class="assets-list" id="assetsList">
           </div>
 
           <!-- History Chart Section -->
@@ -287,20 +320,16 @@
           </div>
         </div>
 
-        <!-- Assets List Card -->
-        <div class="card fade-in" id="assetsSection">
-          <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
-            Your Assets
-            <span id="portfolioPlainValue"
-              style="font-size: 1rem; color: var(--text-secondary); font-weight: 500;">$0</span>
-          </div>
-          <div class="assets-list" id="assetsList">
-            <div class="empty-state">
-              <div class="empty-state-icon">📭</div>
-              <p>No assets yet</p>
-              <p style="font-size: 0.9rem; margin-top: 0.5rem;">
-                <a href="admin.html" style="color: var(--accent-crypto);">Add your first asset</a>
-              </p>
+        <!-- Chart Section -->
+        <div class="card fade-in" id="chartSection">
+          <div class="card-title">Portfolio Allocation</div>
+          <div class="chart-container">
+            <div class="chart-wrapper">
+              <canvas id="portfolioChart"></canvas>
+              <div class="chart-center">
+                <div class="chart-total-label">Total Balance</div>
+                <div class="chart-total-value" id="totalValue">$0.00</div>
+              </div>
             </div>
           </div>
         </div>
@@ -357,8 +386,11 @@
 
     function updateUI(data) {
       // Update total value - use compact format for large numbers
-      document.getElementById('totalValue').textContent =
-        PortfolioApp.formatCurrencyCompact(data.grandTotal);
+      const formattedTotal = PortfolioApp.formatCurrencyCompact(data.grandTotal);
+      document.getElementById('totalValue').textContent = formattedTotal;
+
+      // Update Hero Section (Mobile)
+      document.getElementById('heroTotalValue').textContent = PortfolioApp.formatCurrency(data.grandTotal);
 
       // Update plain value next to "Your Assets" - full number format
       document.getElementById('portfolioPlainValue').textContent =
@@ -388,22 +420,38 @@
         }
       });
 
-      // Update total profit/loss
+      // Update total profit/loss (Desktop & Mobile Hero)
       const profitContainer = document.getElementById('totalProfitContainer');
       const profitValue = document.getElementById('totalProfitValue');
 
+      // Hero PnL elements
+      const heroPnlCard = document.getElementById('heroPnlCard');
+      const heroPnlAmount = document.getElementById('heroPnlAmount');
+      const heroPnlPercent = document.getElementById('heroPnlPercent');
+
       if (data.totalCostBasis > 0) {
+        // Desktop
         profitContainer.style.display = 'block';
         const isPositive = data.totalProfitLoss >= 0;
         const sign = isPositive ? '+' : '';
         profitValue.className = `total-profit-value ${isPositive ? 'profit' : 'loss'}`;
         profitValue.textContent = `${sign}${PortfolioApp.formatCurrency(data.totalProfitLoss)} (${sign}${PortfolioApp.formatPercent(data.totalProfitLossPercent)})`;
+
+        // Mobile Hero
+        heroPnlCard.style.display = 'flex'; // or block
+        heroPnlCard.className = `pnl-card ${isPositive ? 'positive' : 'negative'}`;
+        heroPnlAmount.textContent = `${sign}${PortfolioApp.formatCurrency(data.totalProfitLoss)}`;
+        heroPnlPercent.textContent = `${sign}${PortfolioApp.formatPercent(data.totalProfitLossPercent)}`;
       } else {
+        // Desktop
         profitContainer.style.display = 'none';
+        // Mobile
+        heroPnlCard.style.display = 'none';
       }
 
-      // Update assets list
-      updateAssetsList(data.assets);
+      // Update assets list - Sort by Value Descending Globally
+      const sortedAssets = [...data.assets].sort((a, b) => b.value - a.value);
+      updateAssetsList(sortedAssets);
     }
 
     function updateAssetsList(assets) {
@@ -417,12 +465,9 @@
         return;
       }
 
-      // Sort by value descending
-      const sorted = [...assets].sort((a, b) => b.value - a.value);
-
       // Clear and render using safe DOM utils
       container.innerHTML = '';
-      sorted.forEach(asset => {
+      assets.forEach(asset => {
         const item = DOMUtils.createAssetItem(asset, {
           showValue: true,
           showPnL: true
@@ -445,19 +490,57 @@
       const checkbox = document.getElementById('mobileMode');
       const saved = localStorage.getItem('portfolioMobileMode');
 
+      const applyMobileMode = (isMobile) => {
+        if (isMobile) {
+          document.body.classList.add('mobile-mode');
+          // Start with Assets tab Active when switching to mobile
+          switchTab('assetsSection');
+        } else {
+          document.body.classList.remove('mobile-mode');
+          // Reset visibility of cards for desktop
+          document.getElementById('chartSection').style.display = '';
+          document.getElementById('assetsSection').style.display = '';
+        }
+      };
+
       if (saved === 'true') {
         checkbox.checked = true;
-        document.body.classList.add('mobile-mode');
+        applyMobileMode(true);
       }
 
       checkbox.addEventListener('change', function () {
-        if (this.checked) {
-          document.body.classList.add('mobile-mode');
-          localStorage.setItem('portfolioMobileMode', 'true');
-        } else {
-          document.body.classList.remove('mobile-mode');
-          localStorage.setItem('portfolioMobileMode', 'false');
-        }
+        applyMobileMode(this.checked);
+        localStorage.setItem('portfolioMobileMode', this.checked);
+      });
+    }
+
+    // Tab System
+    function switchTab(tabId) {
+      // Only relevant in mobile mode
+      if (!document.body.classList.contains('mobile-mode')) return;
+
+      // Update buttons
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tabId);
+      });
+
+      // Update Content
+      // Hide all main sections first
+      document.getElementById('chartSection').classList.remove('active-tab');
+      document.getElementById('assetsSection').classList.remove('active-tab');
+
+      // Show target
+      const target = document.getElementById(tabId);
+      if (target) {
+        target.classList.add('active-tab');
+      }
+    }
+
+    function initTabSystem() {
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          switchTab(btn.dataset.tab);
+        });
       });
     }
 
@@ -492,9 +575,21 @@
     }
 
     function updateHistoryChart(days) {
-      // Update active button
+      // Update active button (both desktop and mobile)
       document.querySelectorAll('.period-btn').forEach(btn => {
-        btn.classList.toggle('active', parseInt(btn.dataset.days) === days);
+        // Simple logic for All vs Int
+        const btnDays = parseInt(btn.onclick.toString().match(/\d+/)[0]);
+        btn.classList.toggle('active', btnDays === days); // Approximate match needed or improve btn selection
+      });
+      // Better: pass references or selection logic but for now simple toggle.
+      // Re-query based on onclick attribute or data attribute is slightly fragile but quick.
+      // Let's implement robust selection:
+      document.querySelectorAll('.period-btn').forEach(btn => {
+        // Reset
+        btn.classList.remove('active');
+        if (btn.getAttribute('onclick').includes(`(${days})`)) {
+          btn.classList.add('active');
+        }
       });
 
       // Get history data
@@ -507,14 +602,21 @@
       }
 
       document.getElementById('historyEmpty').style.display = 'none';
-      drawHistoryChart(filtered);
+
+      // Draw Desktop Chart
+      drawLineChart(filtered, 'historyChart');
+      // Draw Mobile Hero Chart
+      drawLineChart(filtered, 'heroChart', true);
     }
 
-    function drawHistoryChart(data) {
-      const canvas = document.getElementById('historyChart');
+    function drawLineChart(data, canvasId, isHero = false) {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas) return; // Canvas might not exist or be hidden
+
       const ctx = canvas.getContext('2d');
       const rect = canvas.parentElement.getBoundingClientRect();
 
+      // Adjust size
       canvas.width = rect.width * window.devicePixelRatio;
       canvas.height = rect.height * window.devicePixelRatio;
       canvas.style.width = rect.width + 'px';
@@ -523,18 +625,22 @@
 
       const width = rect.width;
       const height = rect.height;
-      const padding = { top: 10, right: 10, bottom: 20, left: 50 };
+
+      // Hero chart has less padding
+      const padding = isHero ? { top: 5, right: 0, bottom: 5, left: 0 } : { top: 10, right: 10, bottom: 20, left: 50 };
 
       const values = data.map(d => d.total);
-      const minVal = Math.min(...values) * 0.95;
-      const maxVal = Math.max(...values) * 1.05;
+      const minVal = Math.min(...values) * 0.99;
+      const maxVal = Math.max(...values) * 1.01;
 
       ctx.clearRect(0, 0, width, height);
 
       // Draw line
       ctx.beginPath();
-      ctx.strokeStyle = '#f7931a';
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#f7931a'; // Orange
+      ctx.lineWidth = isHero ? 3 : 2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
 
       data.forEach((d, i) => {
         const x = padding.left + (i / (data.length - 1)) * (width - padding.left - padding.right);
@@ -545,6 +651,18 @@
       });
 
       ctx.stroke();
+
+      // Add gradient fill for Hero
+      if (isHero) {
+        ctx.lineTo(width, height);
+        ctx.lineTo(0, height);
+        ctx.closePath();
+        const gradient = ctx.createLinearGradient(0, 0, 0, height);
+        gradient.addColorStop(0, 'rgba(247, 147, 26, 0.2)');
+        gradient.addColorStop(1, 'rgba(247, 147, 26, 0)');
+        ctx.fillStyle = gradient;
+        ctx.fill();
+      }
     }
 
     // Offline Detection
@@ -564,6 +682,7 @@
       document.getElementById('currencySelect').value = CurrencyManager.current;
 
       initMobileMode();
+      initTabSystem();
       initDashboard();
 
       // Initialize history chart

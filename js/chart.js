@@ -121,8 +121,11 @@ class PortfolioChart {
         // Build tooltip content
         const colorStyle = `background: linear-gradient(135deg, ${this.colors[segment.category].gradient.join(', ')})`;
 
+        // Sort assets by value (or percentage) descending
+        const sortedAssets = [...segment.assets].sort((a, b) => b.categoryPercentage - a.categoryPercentage);
+
         let assetsHtml = '';
-        segment.assets.forEach(asset => {
+        sortedAssets.forEach(asset => {
             assetsHtml += `
         <div class="tooltip-asset">
           <span>${asset.name}</span>
@@ -238,6 +241,19 @@ class PortfolioChart {
 
                 currentAngle += sweepAngle;
             }
+        });
+
+        // Sort segments by value descending to match guide
+        this.segments.sort((a, b) => b.total - a.total);
+
+        // Re-calculate angles based on sorted order for visual consistency
+        // Note: We need to re-calculate angles because sorting breaks the contiguous sweep
+        let angle = -Math.PI / 2;
+        this.segments.forEach(seg => {
+            const sweep = seg.endAngle - seg.startAngle;
+            seg.startAngle = angle;
+            seg.endAngle = angle + sweep;
+            angle += sweep;
         });
 
         this.draw();

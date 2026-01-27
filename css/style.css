@@ -1,5 +1,5 @@
 /* Portfolio Tracker - Premium Dark Theme */
-
+/* ... (Existing Variables) ... */
 :root {
   /* Color Palette */
   --bg-primary: #0a0a0f;
@@ -14,6 +14,15 @@
   --accent-crypto: #f7931a;
   --accent-stocks: #00d4aa;
   --accent-gold: #ffd700;
+
+  /* Profit / Loss Colors */
+  --profit-text: #00d4aa;
+  --profit-bg: rgba(0, 212, 170, 0.1);
+  --profit-border: rgba(0, 212, 170, 0.3);
+
+  --loss-text: #ff5050;
+  --loss-bg: rgba(255, 80, 80, 0.1);
+  --loss-border: rgba(255, 80, 80, 0.3);
 
   --gradient-crypto: linear-gradient(135deg, #f7931a, #ff6b00);
   --gradient-stocks: linear-gradient(135deg, #00d4aa, #00a080);
@@ -128,7 +137,211 @@ body::before {
   transform: translateY(-2px);
 }
 
-/* Cards */
+/* ============ Mobile Mode Components ============ */
+
+/* Hero Section (Hidden by default) */
+.hero-section {
+  display: none;
+  text-align: center;
+  margin-bottom: var(--spacing-lg);
+  padding: var(--spacing-md) 0;
+}
+
+.hero-label {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.hero-value {
+  font-size: 2.5rem;
+  font-weight: 700;
+  letter-spacing: -1px;
+  margin-bottom: var(--spacing-md);
+}
+
+.pnl-cards {
+  display: flex;
+  gap: var(--spacing-md);
+  justify-content: center;
+}
+
+.pnl-card {
+  flex: 1;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  background: var(--bg-glass);
+}
+
+.pnl-card.positive {
+  color: var(--profit-text);
+  background: var(--profit-bg);
+  border-color: var(--profit-border);
+}
+
+.pnl-card.negative {
+  color: var(--loss-text);
+  background: var(--loss-bg);
+  border-color: var(--loss-border);
+}
+
+.pnl-amount {
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.pnl-percent {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+/* Tab Navigation (Hidden by default) */
+.tab-nav {
+  display: none;
+  position: sticky;
+  top: 60px;
+  /* Adjust based on header height */
+  z-index: 90;
+  background: var(--bg-primary);
+  /* Ensure background is solid behind sticky tabs */
+  padding-bottom: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.tab-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  padding: var(--spacing-sm);
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.2s ease;
+}
+
+.tab-btn.active {
+  color: var(--text-primary);
+}
+
+.tab-btn.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  /* Align with border-bottom */
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: var(--accent-crypto);
+  /* Use primary accent */
+}
+
+/* Asset List - Mobile Enhancements */
+.asset-icon-wrapper {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* background color set inline or via specific classes */
+  backdrop-filter: blur(8px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  /* Clip image */
+}
+
+.asset-icon-wrapper img {
+  width: 80%;
+  /* Slightly smaller than wrapper */
+  height: 80%;
+  object-fit: contain;
+}
+
+.asset-icon-wrapper.crypto-bg {
+  background: rgba(247, 147, 26, 0.15);
+  border: 1px solid rgba(247, 147, 26, 0.2);
+}
+
+.asset-icon-wrapper.stocks-bg {
+  background: rgba(0, 212, 170, 0.15);
+  border: 1px solid rgba(0, 212, 170, 0.2);
+}
+
+.asset-icon-wrapper.gold-bg {
+  background: rgba(255, 215, 0, 0.15);
+  border: 1px solid rgba(255, 215, 0, 0.2);
+}
+
+/* Mobile Mode Overrides */
+body.mobile-mode .header {
+  padding: var(--spacing-sm) 0;
+  margin-bottom: var(--spacing-md);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(10, 10, 15, 0.9);
+  /* --bg-primary with opacity */
+  backdrop-filter: blur(10px);
+}
+
+body.mobile-mode .stats-grid {
+  display: none;
+}
+
+body.mobile-mode .hero-section {
+  display: block;
+}
+
+body.mobile-mode .tab-nav {
+  display: flex;
+}
+
+body.mobile-mode .dashboard-grid {
+  display: block;
+  /* Remove grid to stack items or control visibility */
+}
+
+/* Tab Content Visibility in Mobile Mode */
+body.mobile-mode .card {
+  display: none;
+  /* Hide cards by default in mobile mode */
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+body.mobile-mode .card.active-tab {
+  display: block;
+  animation: fadeIn 0.3s ease;
+}
+
+body.mobile-mode .assets-list {
+  max-height: none;
+  /* Let the page scroll */
+  overflow-y: visible;
+  padding-bottom: 80px;
+  /* Space for bottom interaction or just breathing room */
+}
+
+body.mobile-mode .asset-item {
+  padding: 12px 0;
+  border: none;
+  border-bottom: 1px solid var(--border-color);
+  background: transparent;
+  border-radius: 0;
+}
+
+body.mobile-mode .asset-item:hover {
+  background: transparent;
+}
+
+
+/* Cards - Regular Desktop Styles */
 .card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
@@ -174,6 +387,8 @@ body::before {
   align-items: center;
   min-height: 400px;
 }
+
+/* ... (Rest of existing CSS) ... */
 
 .chart-wrapper {
   position: relative;
@@ -396,8 +611,8 @@ body::before {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-sm);
-  max-height: 400px;
-  overflow-y: auto;
+  /* Removed max-height to fix desktop scrolling issue */
+  min-height: 200px;
 }
 
 .asset-item {
@@ -731,20 +946,70 @@ body::before {
 /* ============ Mobile Optimizations ============ */
 /* For Android app conversion via WebView */
 
-/* Touch-friendly targets (minimum 44px) */
+/* Edge-to-edge feel for mobile */
 @media (max-width: 600px) {
+
+  /* Reduce outer padding for more screen space */
   .container {
-    padding: var(--spacing-sm);
+    padding: var(--spacing-xs);
+    max-width: 100%;
   }
 
+  /* Allow header to breathe but keep it compact */
   .header {
-    flex-wrap: wrap;
-    gap: var(--spacing-sm);
-    margin-bottom: var(--spacing-md);
+    flex-wrap: nowrap;
+    /* Keep logo and hamburger inline if possible */
+    gap: var(--spacing-xs);
+    margin-bottom: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-xs);
   }
 
+  body.mobile-mode .container {
+    padding: 0;
+    /* Edge to edge for mobile mode */
+  }
+
+  body.mobile-mode .header {
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: rgba(10, 10, 15, 0.95);
+    margin-bottom: 0;
+  }
+
+  body.mobile-mode .hero-section {
+    padding: var(--spacing-lg) var(--spacing-md);
+    background: radial-gradient(circle at top, rgba(29, 29, 39, 0.4), transparent 70%);
+    margin-bottom: 0;
+  }
+
+  body.mobile-mode .tab-nav {
+    margin: 0;
+    padding: 0;
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  body.mobile-mode .tab-btn {
+    padding: 16px;
+    border-bottom: 2px solid transparent;
+    /* Prepare for active state */
+  }
+
+  body.mobile-mode .assets-list {
+    padding: 0;
+    gap: 0;
+    /* Continuous list look */
+  }
+
+  body.mobile-mode .asset-item {
+    padding: 16px;
+    border-bottom: 1px solid var(--border-color);
+    margin: 0;
+    border-radius: 0;
+  }
+
+  /* Adjust icon size slightly for small screens if needed */
   .logo {
-    font-size: 1.2rem;
+    font-size: 1.1rem;
   }
 
   .logo-icon {
@@ -754,79 +1019,66 @@ body::before {
   }
 
   .nav-link {
-    padding: var(--spacing-sm);
-    font-size: 0.9rem;
-  }
-
-  .card {
-    padding: var(--spacing-md);
-  }
-
-  .card-title {
-    font-size: 0.95rem;
-  }
-
-  /* Bigger touch targets for buttons */
-  .btn {
-    min-height: 44px;
-    padding: var(--spacing-sm) var(--spacing-md);
-  }
-
-  .btn-icon {
-    width: 44px;
-    height: 44px;
-    font-size: 1.2rem;
-  }
-
-  /* Form inputs */
-  .form-input,
-  .form-select {
-    min-height: 44px;
-    font-size: 16px;
-    /* Prevents iOS zoom on focus */
-  }
-
-  .category-btn {
-    min-height: 44px;
+    padding: var(--spacing-xs);
     font-size: 0.85rem;
-    padding: var(--spacing-xs);
   }
+}
 
-  /* Admin asset items */
-  .admin-asset-item {
-    flex-wrap: wrap;
-    gap: var(--spacing-sm);
-  }
+.btn-icon {
+  width: 44px;
+  height: 44px;
+  font-size: 1.2rem;
+}
 
-  .admin-asset-actions {
-    width: 100%;
-    justify-content: flex-end;
-  }
+/* Form inputs */
+.form-input,
+.form-select {
+  min-height: 44px;
+  font-size: 16px;
+  /* Prevents iOS zoom on focus */
+}
 
-  /* Assets list */
-  .assets-list {
-    max-height: none;
-    /* Allow full scroll on mobile */
-  }
+.category-btn {
+  min-height: 44px;
+  font-size: 0.85rem;
+  padding: var(--spacing-xs);
+}
 
-  .asset-icon,
-  .asset-icon-img {
-    width: 40px;
-    height: 40px;
-  }
+/* Admin asset items */
+.admin-asset-item {
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+}
 
-  .asset-name {
-    font-size: 0.95rem;
-  }
+.admin-asset-actions {
+  width: 100%;
+  justify-content: flex-end;
+}
 
-  /* Legend */
-  .legend {
-    gap: var(--spacing-sm);
-  }
+/* Assets list */
+.assets-list {
+  max-height: none;
+  /* Allow full scroll on mobile */
+}
 
-  .legend-item {
-    padding: var(--spacing-xs);
-  }
+.asset-icon,
+.asset-icon-img {
+  width: 40px;
+  height: 40px;
+}
+
+.asset-name {
+  font-size: 0.95rem;
+}
+
+/* Legend */
+.legend {
+  gap: var(--spacing-sm);
+}
+
+.legend-item {
+  padding: var(--spacing-xs);
+}
 }
 
 /* Safe area for notched phones */

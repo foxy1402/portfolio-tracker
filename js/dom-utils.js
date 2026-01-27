@@ -9,19 +9,19 @@ const DOMUtils = {
    */
   createElement(tag, options = {}) {
     const element = document.createElement(tag);
-    
+
     if (options.className) {
       element.className = options.className;
     }
-    
+
     if (options.id) {
       element.id = options.id;
     }
-    
+
     if (options.text) {
       element.textContent = options.text; // Safe - auto-escaped
     }
-    
+
     if (options.html) {
       // Only allow if explicitly marked as safe
       if (options.html.safe === true) {
@@ -30,23 +30,23 @@ const DOMUtils = {
         console.warn('Unsafe HTML blocked. Use text instead or mark as safe.');
       }
     }
-    
+
     if (options.attributes) {
       Object.entries(options.attributes).forEach(([key, value]) => {
         element.setAttribute(key, value);
       });
     }
-    
+
     if (options.styles) {
       Object.assign(element.style, options.styles);
     }
-    
+
     if (options.events) {
       Object.entries(options.events).forEach(([event, handler]) => {
         element.addEventListener(event, handler);
       });
     }
-    
+
     if (options.children) {
       options.children.forEach(child => {
         if (child instanceof HTMLElement) {
@@ -54,7 +54,7 @@ const DOMUtils = {
         }
       });
     }
-    
+
     return element;
   },
 
@@ -66,60 +66,97 @@ const DOMUtils = {
       className: 'asset-item'
     });
 
-    // Info section
-    const info = this.createElement('div', {
-      className: 'asset-info'
-    });
-
-    // Icon
+    // 1. Icon (Far Left)
     const icon = this.createAssetIcon(asset);
-    info.appendChild(icon);
+    icon.style.marginRight = '12px';
+    item.appendChild(icon);
 
-    // Details
-    const details = this.createElement('div');
-    
-    const name = this.createElement('div', {
-      className: 'asset-name',
-      text: asset.name // Safe - textContent
+    // 2. Main Info Column (Symbol+Qty / Value)
+    const leftCol = this.createElement('div', {
+      className: 'asset-col-left',
+      styles: { display: 'flex', flexDirection: 'column', gap: '4px', flex: '1.5', minWidth: '0' }
     });
-    
-    const symbol = this.createElement('div', {
-      className: 'asset-symbol',
-      text: `${asset.symbol || ''} • ${this.getCategoryLabel(asset.category)}`
-    });
-    
-    details.appendChild(name);
-    details.appendChild(symbol);
-    info.appendChild(details);
-    
-    item.appendChild(info);
 
-    // Value section
+    // Row 1: Symbol + Qty
+    const topRow = this.createElement('div', {
+      styles: { display: 'flex', alignItems: 'center', gap: '6px' }
+    });
+
+    topRow.appendChild(this.createElement('span', {
+      text: asset.symbol || asset.name,
+      styles: { fontWeight: '700', fontSize: '1rem', color: 'var(--text-primary)' }
+    }));
+
+    topRow.appendChild(this.createElement('span', {
+      text: new Intl.NumberFormat('en-US', { maximumFractionDigits: 4 }).format(asset.balance),
+      styles: { fontSize: '0.9rem', color: 'var(--text-secondary)' }
+    }));
+
+    // Row 2: Total Value
+    const bottomRow = this.createElement('div', {
+      text: PortfolioApp.formatCurrency(asset.value),
+      styles: { fontWeight: '500', fontSize: '0.95rem', color: 'var(--text-muted)' }
+    });
+
+    leftCol.appendChild(topRow);
+    leftCol.appendChild(bottomRow);
+    item.appendChild(leftCol);
+
+    // 3. Middle Column: PnL (Unrealized)
+    if (asset.costBasis > 0 && options.showPnL !== false) {
+      const midCol = this.createElement('div', {
+        className: 'asset-col-mid',
+        styles: { flex: '1.2', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center', gap: '4px' }
+      });
+
+      const isPositive = asset.profitLoss >= 0;
+      const sign = isPositive ? '+' : '';
+      const color = isPositive ? 'var(--profit-text)' : 'var(--loss-text)';
+      const badgeBg = isPositive ? 'var(--profit-bg)' : 'var(--loss-bg)';
+
+      // PnL $
+      const pnlUsd = this.createElement('div', {
+        text: `${sign}${PortfolioApp.formatCurrency(asset.profitLoss)}`,
+        styles: { color: color, fontWeight: '600', fontSize: '0.9rem' }
+      });
+
+      // PnL % Badge
+      const pnlBadge = this.createElement('div', {
+        styles: {
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '2px',
+          background: badgeBg,
+          padding: '2px 6px',
+          borderRadius: '4px',
+          color: color,
+          fontSize: '0.8rem',
+          fontWeight: '500'
+        },
+        text: `${isPositive ? '▲' : '▼'} ${Math.abs(asset.profitLossPercent).toFixed(2)}%`
+      });
+
+      midCol.appendChild(pnlUsd);
+      midCol.appendChild(pnlBadge);
+      item.appendChild(midCol);
+    } else {
+      item.appendChild(this.createElement('div', { styles: { flex: '1' } }));
+    }
+
+    // 4. Right Column: Price
     if (options.showValue !== false) {
-      const value = this.createElement('div', {
-        className: 'asset-value'
+      const rightCol = this.createElement('div', {
+        className: 'asset-col-right',
+        styles: { flex: '0.8', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center' }
       });
-      
+
       const price = this.createElement('div', {
-        className: 'asset-price',
-        text: PortfolioApp.formatCurrency(asset.value)
+        text: PortfolioApp.formatCurrency(asset.currentPrice),
+        styles: { fontWeight: '600', fontSize: '1rem', color: 'var(--text-primary)' }
       });
-      
-      value.appendChild(price);
 
-      // P/L if available
-      if (asset.costBasis > 0 && options.showPnL !== false) {
-        const pnl = this.createProfitLossBadge(asset);
-        value.appendChild(pnl);
-      }
-
-      const balance = this.createElement('div', {
-        className: 'asset-balance',
-        text: `${asset.balance} @ ${PortfolioApp.formatCurrency(asset.currentPrice)}`
-      });
-      
-      value.appendChild(balance);
-      item.appendChild(value);
+      rightCol.appendChild(price);
+      item.appendChild(rightCol);
     }
 
     return item;
@@ -129,8 +166,9 @@ const DOMUtils = {
    * Create asset icon (safe)
    */
   createAssetIcon(asset) {
-    const iconContainer = this.createElement('div', {
-      className: `asset-icon ${asset.category}`
+    // New Wrapper with background
+    const wrapper = this.createElement('div', {
+      className: `asset-icon-wrapper ${asset.category}-bg`
     });
 
     if (asset.iconUrl) {
@@ -141,23 +179,27 @@ const DOMUtils = {
         },
         className: 'asset-icon-img'
       });
-      
+
       // Fallback to text if image fails
       img.onerror = () => {
         img.style.display = 'none';
-        iconContainer.textContent = asset.symbol 
-          ? asset.symbol.substring(0, 2).toUpperCase() 
+        wrapper.textContent = asset.symbol
+          ? asset.symbol.substring(0, 2).toUpperCase()
           : '??';
+        wrapper.style.fontSize = '0.8rem';
+        wrapper.style.fontWeight = '700';
       };
-      
-      iconContainer.appendChild(img);
+
+      wrapper.appendChild(img);
     } else {
-      iconContainer.textContent = asset.symbol 
-        ? asset.symbol.substring(0, 2).toUpperCase() 
+      wrapper.textContent = asset.symbol
+        ? asset.symbol.substring(0, 2).toUpperCase()
         : '??';
+      wrapper.style.fontSize = '0.8rem';
+      wrapper.style.fontWeight = '700';
     }
 
-    return iconContainer;
+    return wrapper;
   },
 
   /**
@@ -205,7 +247,7 @@ const DOMUtils = {
     info.appendChild(icon);
 
     const details = this.createElement('div');
-    
+
     const name = this.createElement('div', {
       className: 'asset-name'
     });
@@ -308,7 +350,7 @@ const DOMUtils = {
     });
 
     let detailLines = [`Current: ${asset.balance} ${asset.symbol || ''} (${PortfolioApp.formatCurrency(asset.value)})`];
-    
+
     if (asset.targetPercent !== undefined) {
       detailLines.push(`Target: ${asset.targetPercent.toFixed(0)}% → ${PortfolioApp.formatCurrency(asset.targetValue)}`);
     } else if (asset.excluded) {
