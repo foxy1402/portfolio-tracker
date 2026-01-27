@@ -1082,8 +1082,8 @@ body.mobile-mode .asset-item:hover {
 
 .asset-icon,
 .asset-icon-img {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
 }
 
 .asset-name {
@@ -1961,6 +1961,8 @@ body.mobile-mode .card-title {
   align-items: center;
   margin-bottom: var(--spacing-sm);
   font-size: 1rem;
+  padding: 0 8px;
+  /* Move elements inward */
 }
 
 body.mobile-mode #chartSection {

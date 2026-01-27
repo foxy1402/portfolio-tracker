@@ -68,7 +68,7 @@ const DOMUtils = {
 
     // 1. Icon (Far Left)
     const icon = this.createAssetIcon(asset);
-    icon.style.marginRight = '12px';
+    icon.style.marginRight = '6px';
     item.appendChild(icon);
 
     // 2. Main Info Column (Symbol+Qty / Value)
