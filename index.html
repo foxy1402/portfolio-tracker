@@ -93,19 +93,19 @@
     /* Mobile responsive */
     @media (max-width: 480px) {
       .asset-item {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 12px;
+        flex-direction: row;
+        align-items: center;
+        gap: 0;
       }
 
       .asset-value {
-        width: 100%;
-        align-items: flex-start;
-        padding-left: 48px;
+        width: auto;
+        align-items: flex-end;
+        padding-left: 0;
       }
 
       .asset-pnl {
-        justify-content: flex-start;
+        justify-content: flex-end;
       }
 
       .stat-card {
@@ -189,7 +189,7 @@
       Portfolio
     </div>
     <div class="mobile-header-actions">
-      <button id="mobileRefreshBtn" class="mobile-header-btn" title="Refresh">🔄</button>
+
       <button id="mobileThemeBtn" class="mobile-header-btn" title="Theme">🌙</button>
     </div>
   </div>
@@ -203,9 +203,7 @@
       </div>
       <nav style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
         <!-- Refresh Button -->
-        <button id="refreshBtn" class="theme-toggle" title="Refresh prices">
-          🔄
-        </button>
+
         <!-- Currency Selector -->
         <select id="currencySelect" class="currency-select" title="Select currency">
           <option value="USD">🇺🇸 USD</option>
@@ -229,17 +227,26 @@
             <div class="mobile-hero-label">Total Balance</div>
             <div class="mobile-hero-value" id="heroTotalValue">$0</div>
             <div class="mobile-hero-pnl" id="heroPnlContainer">
+              <span class="mobile-pnl-amount" id="heroPnlAmount">$0</span>
               <span class="mobile-pnl-badge positive" id="heroPnlBadge">
                 <span id="heroPnlPercent">+0%</span>
               </span>
-              <span class="mobile-pnl-amount" id="heroPnlAmount">$0</span>
             </div>
           </div>
-          <div class="mobile-hero-chart">
-            <canvas id="heroMiniChart"></canvas>
-          </div>
-        </div>
 
+        </div>
+        <div class="mobile-hero-chart">
+          <canvas id="heroMiniChart"></canvas>
+        </div>
+        <div class="mobile-timeframe-selector">
+          <button class="timeframe-btn active">24H</button>
+          <button class="timeframe-btn">1W</button>
+          <button class="timeframe-btn">1M</button>
+          <button class="timeframe-btn">3M</button>
+          <button class="timeframe-btn">6M</button>
+          <button class="timeframe-btn">1Y</button>
+          <button class="timeframe-btn">ALL</button>
+        </div>
         <!-- Category Pills -->
         <div class="mobile-category-pills" id="categoryPills">
           <div class="category-pill" data-category="crypto">
@@ -308,7 +315,11 @@
               </div>
             </div>
           </div>
-
+          <!-- Total Profit/Loss -->
+          <div class="total-profit" id="totalProfitContainer" style="display: none;">
+            <div class="total-profit-label">Total P/L</div>
+            <div class="total-profit-value" id="totalProfitValue">$0</div>
+          </div>
           <div class="legend">
             <div class="legend-item" data-category="crypto">
               <span class="legend-color crypto"></span>
@@ -337,11 +348,14 @@
               </div>
             </div>
 
-            <div class="period-selector" style="display: flex; gap: 8px; margin-bottom: 12px;">
-              <button class="period-btn active" data-days="7" onclick="updateHistoryChart(7)">7D</button>
-              <button class="period-btn" data-days="30" onclick="updateHistoryChart(30)">30D</button>
-              <button class="period-btn" data-days="90" onclick="updateHistoryChart(90)">90D</button>
-              <button class="period-btn" data-days="0" onclick="updateHistoryChart(0)">All</button>
+            <div class="period-selector" style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+              <button class="period-btn active" data-days="1" onclick="updateHistoryChart(1)">24H</button>
+              <button class="period-btn" data-days="7" onclick="updateHistoryChart(7)">1W</button>
+              <button class="period-btn" data-days="30" onclick="updateHistoryChart(30)">1M</button>
+              <button class="period-btn" data-days="90" onclick="updateHistoryChart(90)">3M</button>
+              <button class="period-btn" data-days="180" onclick="updateHistoryChart(180)">6M</button>
+              <button class="period-btn" data-days="365" onclick="updateHistoryChart(365)">1Y</button>
+              <button class="period-btn" data-days="0" onclick="updateHistoryChart(0)">ALL</button>
             </div>
 
             <div class="performance-chart-wrapper">
@@ -397,11 +411,7 @@
             <div style="flex: 0.8; text-align: right;">Price</div>
           </div>
 
-          <!-- Total Profit/Loss -->
-          <div class="total-profit" id="totalProfitContainer" style="display: none;">
-            <div class="total-profit-label">Total P/L</div>
-            <div class="total-profit-value" id="totalProfitValue">$0</div>
-          </div>
+
 
           <div class="assets-list" id="assetsList">
           </div>
@@ -422,23 +432,13 @@
       </button>
       <button class="bottom-nav-item" data-view="chart">
         <span class="bottom-nav-icon">📊</span>
-        <span>Chart</span>
+        <span>Distribution</span>
       </button>
-      <button class="bottom-nav-item" data-view="performance">
-        <span class="bottom-nav-icon">📈</span>
-        <span>History</span>
-      </button>
-      <button class="bottom-nav-item" onclick="window.location.href='admin.html'">
-        <span class="bottom-nav-icon">⚙️</span>
-        <span>Manage</span>
-      </button>
+
     </div>
   </nav>
 
-  <!-- Mobile FAB -->
-  <button class="mobile-fab" id="mobileFab" onclick="window.location.href='admin.html'" title="Add Asset">
-    +
-  </button>
+
 
   <!-- Scripts -->
   <script src="js/app.js"></script>
@@ -560,6 +560,7 @@
           heroPnlBadge.className = `mobile-pnl-badge ${isPositive ? 'positive' : 'negative'}`;
           heroPnlPercent.textContent = `${isPositive ? '↑' : '↓'} ${sign}${PortfolioApp.formatPercent(data.totalProfitLossPercent)}`;
           heroPnlAmount.textContent = `${sign}${PortfolioApp.formatCurrency(data.totalProfitLoss)}`;
+          heroPnlAmount.className = `mobile-pnl-amount ${isPositive ? 'positive' : 'negative'}`;
         }
       } else {
         if (profitContainer) profitContainer.style.display = 'none';
@@ -666,14 +667,7 @@
           // Hide performance section in chart view
           if (performanceSection) performanceSection.style.display = 'none';
           break;
-        case 'performance':
-          chartSection.classList.add('active-tab');
-          chartSection.style.display = 'block';
-          // Show only performance section
-          if (performanceSection) performanceSection.style.display = 'block';
-          // Scroll to performance section
-          performanceSection?.scrollIntoView({ behavior: 'smooth' });
-          break;
+
       }
     }
 
@@ -706,10 +700,10 @@
     }
 
     // Event listeners
-    document.getElementById('refreshBtn').addEventListener('click', refreshData);
+
 
     // Mobile header buttons
-    document.getElementById('mobileRefreshBtn')?.addEventListener('click', refreshData);
+
     document.getElementById('mobileThemeBtn')?.addEventListener('click', () => {
       const newTheme = ThemeManager.toggle();
       document.getElementById('mobileThemeBtn').textContent = newTheme === 'dark' ? '🌙' : '☀️';
@@ -1037,6 +1031,13 @@
 
       // Initialize history chart
       updateHistoryChart(7);
+
+      // Handle resize for line charts
+      window.addEventListener('resize', () => {
+        const activeBtn = document.querySelector('.period-btn.active');
+        const days = activeBtn ? parseInt(activeBtn.dataset.days) : 7;
+        updateHistoryChart(days);
+      });
 
       // Register Service Worker
       if ('serviceWorker' in navigator) {
