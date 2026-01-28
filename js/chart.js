@@ -33,6 +33,10 @@ class PortfolioChart {
         const dpr = window.devicePixelRatio || 1;
         const rect = this.canvas.getBoundingClientRect();
 
+        if (rect.width === 0 || rect.height === 0) {
+            return;
+        }
+
         this.canvas.width = rect.width * dpr;
         this.canvas.height = rect.height * dpr;
 
@@ -51,9 +55,13 @@ class PortfolioChart {
     bindEvents() {
         this.canvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
         this.canvas.addEventListener('mouseleave', () => this.handleMouseLeave());
+        let resizeTimeout;
         window.addEventListener('resize', () => {
-            this.setupCanvas();
-            this.draw();
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                this.setupCanvas();
+                this.draw();
+            }, 250);
         });
     }
 
