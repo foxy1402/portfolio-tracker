@@ -1306,6 +1306,43 @@
       }
     }
 
+    // Reset Mobile Stats
+    function resetHeroStats() {
+      const balanceEl = document.getElementById('heroTotalValue');
+      const pnlContainer = document.getElementById('heroPnlContainer');
+      const dateEl = document.getElementById('heroScrubDate');
+      const pnlAmountEl = document.getElementById('heroPnlAmount');
+      const pnlPercentEl = document.getElementById('heroPnlPercent');
+      const pnlBadge = document.getElementById('heroPnlBadge');
+
+      if (dateEl) dateEl.style.display = 'none';
+
+      // Restore from window.currentViewStats which matches the active chart view
+      if (window.currentViewStats) {
+        if (balanceEl) balanceEl.textContent = PortfolioApp.formatCurrency(window.currentViewStats.newest);
+
+        const isPositive = window.currentViewStats.change >= 0;
+        const sign = isPositive ? '+' : '';
+        const color = isPositive ? 'var(--success)' : 'var(--danger)';
+        // Note: CSS vars might not be defined in inline style, use class or explicit color
+        // Actually .positive/.negative classes handle color in CSS
+
+        if (pnlBadge) pnlBadge.className = `mobile-pnl-badge ${isPositive ? 'positive' : 'negative'}`;
+
+        if (pnlAmountEl) {
+          pnlAmountEl.textContent = `${sign}${PortfolioApp.formatCurrency(window.currentViewStats.change)}`;
+          pnlAmountEl.className = `mobile-pnl-amount ${isPositive ? 'positive' : 'negative'}`;
+          // Remove manual color to let class handle it
+          pnlAmountEl.style.color = '';
+        }
+
+        if (pnlPercentEl) {
+          pnlPercentEl.textContent = `${isPositive ? '↑' : '↓'} ${sign}${window.currentViewStats.changePercent.toFixed(1)}%`;
+          pnlPercentEl.style.color = '';
+        }
+      }
+    }
+
     // Update Desktop Stats on Hover
     function updateDesktopStats(data, baseData) {
       const valueEl = document.getElementById('perfCurrentValue');

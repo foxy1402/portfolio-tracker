@@ -1357,6 +1357,7 @@ body.light-theme .toast {
 }
 
 /* ============ Fixed Mobile Toggle ============ */
+/* Fixed Mobile Toggle */
 .fixed-mobile-toggle {
   position: fixed;
   bottom: 24px;
@@ -1365,22 +1366,25 @@ body.light-theme .toast {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: var(--bg-card); /* Dark background */
-  background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
-  border: 1px solid var(--border-color);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+
+  /* Glassmorphism Surface - Visible but Dark */
+  background: rgba(30, 30, 40, 0.7) !important;
+  background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02)) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(12px);
+
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-  backdrop-filter: blur(10px);
 }
 
 .fixed-mobile-toggle:hover {
-  transform: scale(1.1);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
-  background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.05));
-  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px) scale(1.05);
+  background: rgba(40, 40, 50, 0.9) !important;
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.5);
 }
 
 .fixed-mobile-toggle input {
@@ -1388,21 +1392,32 @@ body.light-theme .toast {
 }
 
 .toggle-icon {
-  font-size: 1.5rem;
+  font-size: 1.4rem;
   line-height: 1;
-  filter: grayscale(100%) brightness(1.2); /* Make emoji monochrome to fit theme */
+  filter: grayscale(100%);
+  /* Monochromatic by default */
+  opacity: 0.7;
+  transition: all 0.3s ease;
 }
 
-/* When active (checked) */
+.fixed-mobile-toggle:hover .toggle-icon {
+  opacity: 1;
+}
+
+/* When active (checked) - Mobile Mode ON */
 .fixed-mobile-toggle:has(input:checked) {
-  background: var(--accent-crypto);
-  color: #fff;
-  border-color: transparent;
-  box-shadow: 0 4px 12px rgba(247, 147, 26, 0.4);
+  /* No solid orange background - keep it dark/glass but glow orange */
+  background: rgba(30, 30, 40, 0.9) !important;
+  border-color: var(--accent-crypto);
+  box-shadow: 0 0 20px rgba(247, 147, 26, 0.3), inset 0 0 10px rgba(247, 147, 26, 0.1);
 }
 
 .fixed-mobile-toggle:has(input:checked) .toggle-icon {
-  filter: none; /* Restore color when active */
+  filter: none;
+  /* Restore emoji color */
+  opacity: 1;
+  text-shadow: 0 0 10px rgba(247, 147, 26, 0.5);
+  transform: scale(1.1);
 }
 
 /* Hide on mobile devices where button isn't needed? 
