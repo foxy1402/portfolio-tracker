@@ -155,157 +155,171 @@
         <!-- Admin Content -->
         <main>
             <div class="admin-grid">
-                <!-- Add Asset Form -->
-                <div class="card fade-in">
-                    <div class="card-title" id="formTitle">Add New Asset</div>
+                <!-- Left Column: Input Forms -->
+                <div style="display: flex; flex-direction: column; gap: var(--spacing-lg);">
+                    <!-- Add Asset Form -->
+                    <div class="card fade-in">
+                        <div class="card-title" id="formTitle">Add New Asset</div>
 
-                    <form id="assetForm">
-                        <input type="hidden" id="editingId" value="">
+                        <form id="assetForm">
+                            <input type="hidden" id="editingId" value="">
 
-                        <!-- Category Selector -->
-                        <div class="form-group">
-                            <label class="form-label">Category</label>
-                            <div class="category-selector">
-                                <button type="button" class="category-btn crypto active" data-category="crypto">
-                                    🪙 Crypto
+                            <!-- Category Selector -->
+                            <div class="form-group">
+                                <label class="form-label">Category</label>
+                                <div class="category-selector">
+                                    <button type="button" class="category-btn crypto active" data-category="crypto">
+                                        🪙 Crypto
+                                    </button>
+                                    <button type="button" class="category-btn stocks" data-category="stocks">
+                                        📈 Stocks
+                                    </button>
+                                    <button type="button" class="category-btn gold" data-category="gold">
+                                        🥇 Gold
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Asset Name -->
+                            <div class="form-group">
+                                <label class="form-label" for="assetName">Asset Name</label>
+                                <input type="text" class="form-input" id="assetName"
+                                    placeholder="e.g., Bitcoin, Tesla Stock, PAX Gold" required>
+                            </div>
+
+                            <!-- Symbol -->
+                            <div class="form-group">
+                                <label class="form-label" for="assetSymbol">Symbol</label>
+                                <input type="text" class="form-input" id="assetSymbol"
+                                    placeholder="e.g., BTC, TSLA, PAXG">
+                            </div>
+
+                            <!-- CoinGecko ID -->
+                            <div class="form-group">
+                                <label class="form-label" for="coingeckoId">
+                                    CoinGecko ID
+                                    <span style="color: var(--text-muted); font-weight: normal;">(for auto price)</span>
+                                </label>
+                                <input type="text" class="form-input" id="coingeckoId"
+                                    placeholder="e.g., bitcoin, pax-gold, tether-gold">
+                                <div class="form-hint">
+                                    Find IDs at <a href="https://www.coingecko.com" target="_blank"
+                                        style="color: var(--accent-crypto);">coingecko.com</a>
+                                    (URL: coingecko.com/en/coins/<strong>bitcoin</strong>)
+                                </div>
+                            </div>
+
+                            <!-- Manual Price (alternative to CoinGecko) -->
+                            <div class="form-group">
+                                <label class="form-label" for="manualPrice">
+                                    Manual Price (USD)
+                                    <span style="color: var(--text-muted); font-weight: normal;">(overrides API)</span>
+                                </label>
+                                <input type="number" class="form-input" id="manualPrice"
+                                    placeholder="Leave empty to use CoinGecko" step="any" min="0">
+                            </div>
+
+                            <!-- Buy/Average Price for ROI -->
+                            <div class="form-group">
+                                <label class="form-label" for="buyPrice">
+                                    Buy/Avg Price (USD)
+                                    <span style="color: var(--text-muted); font-weight: normal;">(for ROI
+                                        tracking)</span>
+                                </label>
+                                <input type="number" class="form-input" id="buyPrice"
+                                    placeholder="Your average purchase price" step="any" min="0">
+                            </div>
+
+                            <!-- ✨ NEW: Purchase Date Field -->
+                            <div class="form-group">
+                                <label class="form-label" for="purchaseDate">
+                                    Purchase Date
+                                    <span style="color: var(--text-muted); font-weight: normal;">(for performance
+                                        tracking)</span>
+                                </label>
+                                <input type="date" class="form-input" id="purchaseDate" max="9999-12-31">
+                                <div class="form-hint">
+                                    When did you buy this asset? Used to calculate accurate historical performance.
+                                </div>
+                            </div>
+
+                            <!-- Balance -->
+                            <div class="form-group">
+                                <label class="form-label" for="assetBalance">Balance (Amount Held)</label>
+                                <input type="number" class="form-input" id="assetBalance"
+                                    placeholder="e.g., 0.5, 10, 100" step="any" min="0" required>
+                            </div>
+
+                            <!-- Icon URL (manual override) -->
+                            <div class="form-group">
+                                <label class="form-label" for="iconUrl">
+                                    Icon URL
+                                    <span style="color: var(--text-muted); font-weight: normal;">(optional, auto-fetched
+                                        with CoinGecko ID)</span>
+                                </label>
+                                <input type="url" class="form-input" id="iconUrl"
+                                    placeholder="https://... (paste image URL)">
+                            </div>
+
+                            <!-- Notes -->
+                            <div class="form-group">
+                                <label class="form-label" for="assetNotes">
+                                    Notes
+                                    <span style="color: var(--text-muted); font-weight: normal;">(optional)</span>
+                                </label>
+                                <textarea class="form-input notes-field" id="assetNotes"
+                                    placeholder="Add notes about this asset (strategy, target, reminders...)"></textarea>
+                            </div>
+
+                            <!-- Submit Buttons -->
+                            <div style="display: flex; gap: 1rem;">
+                                <button type="submit" class="btn btn-primary btn-block">
+                                    💾 Save Asset
                                 </button>
-                                <button type="button" class="category-btn stocks" data-category="stocks">
-                                    📈 Stocks
+                                <button type="button" class="btn btn-secondary" id="cancelBtn" style="display: none;">
+                                    Cancel
                                 </button>
-                                <button type="button" class="category-btn gold" data-category="gold">
-                                    🥇 Gold
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Bulk Update Purchase Dates (Compact) -->
+                    <div class="card fade-in">
+                        <div class="card-title" style="margin-bottom: 12px; font-size: 1rem;">📅 Bulk Update Dates</div>
+                        <div style="display: flex; gap: 12px; align-items: center;">
+                            <input type="date" class="form-input" id="bulkPurchaseDate" style="flex:1;">
+                            <button class="btn btn-secondary" id="bulkUpdateBtn" style="white-space: nowrap;">
+                                Apply to All
+                            </button>
+                        </div>
+                        <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 8px; margin-bottom: 0;">
+                            Set default date for all assets.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Right Column: Lists -->
+                <div style="display: flex; flex-direction: column; gap: var(--spacing-lg);">
+                    <!-- Assets List -->
+                    <div class="card fade-in">
+                        <div class="card-title"
+                            style="display: flex; justify-content: space-between; align-items: center;">
+                            Your Assets
+                            <div style="display: flex; gap: 8px;">
+                                <button class="export-btn" id="exportCsvBtn" title="Export to CSV">
+                                    📥 Export CSV
                                 </button>
                             </div>
                         </div>
 
-                        <!-- Asset Name -->
-                        <div class="form-group">
-                            <label class="form-label" for="assetName">Asset Name</label>
-                            <input type="text" class="form-input" id="assetName"
-                                placeholder="e.g., Bitcoin, Tesla Stock, PAX Gold" required>
-                        </div>
-
-                        <!-- Symbol -->
-                        <div class="form-group">
-                            <label class="form-label" for="assetSymbol">Symbol</label>
-                            <input type="text" class="form-input" id="assetSymbol" placeholder="e.g., BTC, TSLA, PAXG">
-                        </div>
-
-                        <!-- CoinGecko ID -->
-                        <div class="form-group">
-                            <label class="form-label" for="coingeckoId">
-                                CoinGecko ID
-                                <span style="color: var(--text-muted); font-weight: normal;">(for auto price)</span>
-                            </label>
-                            <input type="text" class="form-input" id="coingeckoId"
-                                placeholder="e.g., bitcoin, pax-gold, tether-gold">
-                            <div class="form-hint">
-                                Find IDs at <a href="https://www.coingecko.com" target="_blank"
-                                    style="color: var(--accent-crypto);">coingecko.com</a>
-                                (URL: coingecko.com/en/coins/<strong>bitcoin</strong>)
+                        <div id="adminAssetsList">
+                            <div class="empty-state">
+                                <div class="empty-state-icon">📭</div>
+                                <p>No assets added yet</p>
                             </div>
                         </div>
-
-                        <!-- Manual Price (alternative to CoinGecko) -->
-                        <div class="form-group">
-                            <label class="form-label" for="manualPrice">
-                                Manual Price (USD)
-                                <span style="color: var(--text-muted); font-weight: normal;">(overrides API)</span>
-                            </label>
-                            <input type="number" class="form-input" id="manualPrice"
-                                placeholder="Leave empty to use CoinGecko" step="any" min="0">
-                        </div>
-
-                        <!-- Buy/Average Price for ROI -->
-                        <div class="form-group">
-                            <label class="form-label" for="buyPrice">
-                                Buy/Avg Price (USD)
-                                <span style="color: var(--text-muted); font-weight: normal;">(for ROI tracking)</span>
-                            </label>
-                            <input type="number" class="form-input" id="buyPrice"
-                                placeholder="Your average purchase price" step="any" min="0">
-                        </div>
-
-                        <!-- Balance -->
-                        <div class="form-group">
-                            <label class="form-label" for="assetBalance">Balance (Amount Held)</label>
-                            <input type="number" class="form-input" id="assetBalance" placeholder="e.g., 0.5, 10, 100"
-                                step="any" min="0" required>
-                        </div>
-
-                        <!-- Icon URL (manual override) -->
-                        <div class="form-group">
-                            <label class="form-label" for="iconUrl">
-                                Icon URL
-                                <span style="color: var(--text-muted); font-weight: normal;">(optional, auto-fetched
-                                    with CoinGecko ID)</span>
-                            </label>
-                            <input type="url" class="form-input" id="iconUrl"
-                                placeholder="https://... (paste image URL)">
-                        </div>
-
-                        <!-- Notes -->
-                        <div class="form-group">
-                            <label class="form-label" for="assetNotes">
-                                Notes
-                                <span style="color: var(--text-muted); font-weight: normal;">(optional)</span>
-                            </label>
-                            <textarea class="form-input notes-field" id="assetNotes"
-                                placeholder="Add notes about this asset (strategy, target, reminders...)"></textarea>
-                        </div>
-
-                        <!-- Submit Buttons -->
-                        <div style="display: flex; gap: 1rem;">
-                            <button type="submit" class="btn btn-primary btn-block">
-                                💾 Save Asset
-                            </button>
-                            <button type="button" class="btn btn-secondary" id="cancelBtn" style="display: none;">
-                                Cancel
-                            </button>
-                        </div>
-                    </form>
-                </div>
-
-                <!-- Assets List -->
-                <div class="card fade-in">
-                    <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
-                        Your Assets
-                        <div style="display: flex; gap: 8px;">
-                            <button class="export-btn" id="exportCsvBtn" title="Export to CSV">
-                                📥 Export CSV
-                            </button>
-                        </div>
                     </div>
 
-                    <div id="adminAssetsList">
-                        <div class="empty-state">
-                            <div class="empty-state-icon">📭</div>
-                            <p>No assets added yet</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Transaction History -->
-                <div class="card fade-in" style="margin-top: var(--spacing-lg);">
-                    <div class="card-title collapsible-header" onclick="toggleTransactions()">
-                        📋 Transaction History
-                        <span class="collapsible-icon">▼</span>
-                    </div>
-                    <div id="transactionContent" class="collapsible-content">
-                        <div class="transaction-list" id="transactionList">
-                            <p style="color: var(--text-muted); text-align: center; padding: 1rem;">
-                                Transactions are logged when you add or update assets.
-                            </p>
-                        </div>
-                        <div style="margin-top: var(--spacing-sm); display: flex; gap: 8px;">
-                            <button class="export-btn" id="exportTxBtn" style="flex: 1;">
-                                📥 Export Transactions
-                            </button>
-                            <button class="btn btn-secondary" id="clearTxBtn" style="color: #ff5050;">
-                                🗑️ Clear
-                            </button>
-                        </div>
-                    </div>
                 </div>
             </div>
 
@@ -364,7 +378,62 @@
             setupSync();
             setupExport();
             renderAssetsList();
-            renderTransactionList();
+            renderAssetsList();
+            setupBulkUpdate();
+        }
+
+        // ============ Bulk Update ============
+        function setupBulkUpdate() {
+            document.getElementById('bulkUpdateBtn').addEventListener('click', () => {
+                const date = document.getElementById('bulkPurchaseDate').value;
+                if (!date) {
+                    ToastManager.warning('Please select a date');
+                    return;
+                }
+
+                if (!confirm(`Set purchase date to ${date} for ALL assets?`)) {
+                    return;
+                }
+
+                const assets = PortfolioApp.getAssets();
+                let updated = 0;
+
+                assets.forEach(asset => {
+                    if (!asset.purchaseDate) {
+                        asset.purchaseDate = date;
+                        updated++;
+                    }
+                });
+
+                if (updated > 0) {
+                    PortfolioApp.saveAssets(assets);
+                    ToastManager.success(`Updated ${updated} assets`);
+                    renderAssetsList();
+                } else {
+                    ToastManager.info('No assets needed updating');
+                }
+            });
+        }
+
+        function addPurchaseDateToExistingAssets() {
+            const assets = PortfolioApp.getAssets();
+            let updated = 0;
+
+            assets.forEach(asset => {
+                if (!asset.purchaseDate) {
+                    // Default to 30 days ago if no purchase date
+                    const defaultDate = new Date();
+                    defaultDate.setDate(defaultDate.getDate() - 30);
+                    asset.purchaseDate = defaultDate.toISOString().split('T')[0];
+                    updated++;
+                }
+            });
+
+            if (updated > 0) {
+                PortfolioApp.saveAssets(assets);
+                ToastManager.success(`Added default purchase dates to ${updated} assets`);
+                console.log(`✓ Migrated ${updated} assets with default purchase dates`);
+            }
         }
 
         // ============ Authentication ============
@@ -499,6 +568,7 @@
                 coingeckoId: document.getElementById('coingeckoId').value.trim().toLowerCase(),
                 manualPrice: document.getElementById('manualPrice').value || null,
                 buyPrice: document.getElementById('buyPrice').value || null,
+                purchaseDate: document.getElementById('purchaseDate').value || null, // ✨ NEW
                 balance: document.getElementById('assetBalance').value,
                 iconUrl: document.getElementById('iconUrl').value.trim() || null,
                 notes: document.getElementById('assetNotes').value.trim() || null,
@@ -516,23 +586,8 @@
                 ToastManager.success(`Added ${asset.name}`);
             }
 
-            // Log transaction
-            const balanceChange = parseFloat(asset.balance) - (oldAsset ? parseFloat(oldAsset.balance) : 0);
-            if (balanceChange !== 0 || !isEdit) {
-                TransactionHistory.add({
-                    type: isEdit ? (balanceChange > 0 ? 'buy' : 'sell') : 'buy',
-                    assetId: editingId || Date.now().toString(),
-                    assetName: asset.name,
-                    amount: Math.abs(balanceChange || parseFloat(asset.balance)),
-                    price: parseFloat(asset.manualPrice || asset.buyPrice || 0),
-                    total: Math.abs(balanceChange || parseFloat(asset.balance)) * parseFloat(asset.buyPrice || 0),
-                    notes: isEdit ? 'Balance update' : 'Initial purchase'
-                });
-            }
-
             resetForm();
             renderAssetsList();
-            renderTransactionList();
         }
 
         function editAsset(id) {
@@ -549,6 +604,7 @@
             document.getElementById('coingeckoId').value = asset.coingeckoId || '';
             document.getElementById('manualPrice').value = asset.manualPrice || '';
             document.getElementById('buyPrice').value = asset.buyPrice || '';
+            document.getElementById('purchaseDate').value = asset.purchaseDate || ''; // ✨ NEW
             document.getElementById('assetBalance').value = asset.balance;
             document.getElementById('iconUrl').value = asset.iconUrl || '';
             document.getElementById('assetNotes').value = asset.notes || '';
@@ -598,8 +654,6 @@
         // ============ Export Functions ============
         function setupExport() {
             document.getElementById('exportCsvBtn').addEventListener('click', exportAssetsCSV);
-            document.getElementById('exportTxBtn').addEventListener('click', exportTransactionsCSV);
-            document.getElementById('clearTxBtn').addEventListener('click', clearTransactions);
         }
 
         function exportAssetsCSV() {
@@ -624,23 +678,6 @@
             ToastManager.success('Assets exported!');
         }
 
-        function exportTransactionsCSV() {
-            const csv = TransactionHistory.export();
-            if (!csv || csv.split('\n').length < 2) {
-                ToastManager.warning('No transactions to export');
-                return;
-            }
-
-            const blob = new Blob([csv], { type: 'text/csv' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'portfolio_transactions.csv';
-            a.click();
-            URL.revokeObjectURL(url);
-            ToastManager.success('Transactions exported!');
-        }
-
         function downloadCSV(rows, filename) {
             const csv = rows.map(r => r.join(',')).join('\n');
             const blob = new Blob([csv], { type: 'text/csv' });
@@ -650,66 +687,6 @@
             a.download = filename;
             a.click();
             URL.revokeObjectURL(url);
-        }
-
-        function clearTransactions() {
-            if (confirm('Clear all transaction history?')) {
-                TransactionHistory.clear();
-                renderTransactionList();
-                ToastManager.info('Transaction history cleared');
-            }
-        }
-
-        // ============ Transaction History ============
-        function toggleTransactions() {
-            const content = document.getElementById('transactionContent');
-            content.parentElement.classList.toggle('collapsed');
-        }
-
-        function renderTransactionList() {
-            const container = document.getElementById('transactionList');
-            const transactions = TransactionHistory.getAll().slice(0, 20);
-
-            if (transactions.length === 0) {
-                DOMUtils.showEmptyState(container, 'No transactions yet');
-                return;
-            }
-
-            container.innerHTML = '';
-            transactions.forEach(tx => {
-                const item = DOMUtils.createElement('div', {
-                    className: 'transaction-item'
-                });
-
-                const left = DOMUtils.createElement('div');
-                const typeSpan = DOMUtils.createElement('span', {
-                    className: `transaction-type ${tx.type}`,
-                    text: tx.type
-                });
-                const nameSpan = DOMUtils.createElement('span', {
-                    text: tx.assetName,
-                    styles: { marginLeft: '8px' }
-                });
-                left.appendChild(typeSpan);
-                left.appendChild(nameSpan);
-
-                const right = DOMUtils.createElement('div', {
-                    styles: { textAlign: 'right' }
-                });
-                const amountDiv = DOMUtils.createElement('div', {
-                    text: `${tx.amount} units`
-                });
-                const dateDiv = DOMUtils.createElement('div', {
-                    className: 'transaction-date',
-                    text: new Date(tx.timestamp).toLocaleDateString()
-                });
-                right.appendChild(amountDiv);
-                right.appendChild(dateDiv);
-
-                item.appendChild(left);
-                item.appendChild(right);
-                container.appendChild(item);
-            });
         }
 
         // ============ Render Assets ============

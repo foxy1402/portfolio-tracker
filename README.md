@@ -45,6 +45,15 @@ Click the **📱** icon in the header to switch to a phone-optimized layout.
 - Moves the asset list to the bottom for better one-handed usage.
 - Remembers your preference forever on that device.
 
+### 📅 Purchase Date Tracking
+Accurate historical performance calculation based on **when you bought** the asset.
+- **Accurate History**: Chart starts tracking performance from your specific purchase date.
+- **Data Badges**:
+    - `✓ Accurate`: Using your purchase date data.
+    - `⚠ Estimated`: Using hypothetical data (add purchase dates to fix).
+    - `✓ Real Data`: Using recorded daily snapshots.
+- **Bulk Update**: Set purchase dates for all assets at once in the Admin panel.
+
 ## Usage
 
 ### Adding Assets
@@ -54,6 +63,7 @@ Click the **📱** icon in the header to switch to a phone-optimized layout.
    - **Name & Symbol**
    - **CoinGecko ID** (for auto pricing) OR **Manual Price**
    - **Buy Price** (your average cost for ROI tracking)
+   - **Purchase Date** (for accurate historical charts)
    - **Balance** (amount held)
 
 ### Syncing Data

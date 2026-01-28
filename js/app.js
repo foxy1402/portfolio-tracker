@@ -745,7 +745,216 @@ const HistoricalPriceAPI = {
   },
 
   async calculatePerformance(days = 30) {
+    // First, try accurate calculation based on purchase dates
+    const accuratePerf = await PurchaseDatePerformance.calculateStats(days);
+
+    if (accuratePerf && accuratePerf.dataPoints >= 2) {
+      console.log('✓ Using accurate performance (based on purchase dates)');
+      return accuratePerf;
+    }
+
+    // Fallback: Try local snapshots
+    const localHistory = HistoryTracker.getRange(days === 'max' || days === 0 ? 0 : days);
+
+    if (localHistory.length >= 2) {
+      console.log('Using local snapshot history');
+      const oldest = localHistory[0].total;
+      const newest = localHistory[localHistory.length - 1].total;
+      const values = localHistory.map(h => h.total);
+
+      return {
+        oldest,
+        newest,
+        change: newest - oldest,
+        changePercent: oldest > 0 ? ((newest - oldest) / oldest * 100) : 0,
+        high: Math.max(...values),
+        low: Math.min(...values),
+        avg: values.reduce((a, b) => a + b, 0) / values.length,
+        dataPoints: localHistory.length,
+        history: localHistory,
+        isAccurate: false,
+        isHypothetical: false
+      };
+    }
+
+    // Last resort: Hypothetical calculation
+    console.warn('Using hypothetical performance (no purchase dates or local history)');
     const history = await this.calculatePortfolioHistory(days);
+
+    if (!history || history.length < 2) {
+      return null;
+    }
+
+    const oldest = history[0].total;
+    const newest = history[history.length - 1].total;
+    const values = history.map(h => h.total);
+
+    return {
+      oldest,
+      newest,
+      change: newest - oldest,
+      changePercent: oldest > 0 ? ((newest - oldest) / oldest * 100) : 0,
+      high: Math.max(...values),
+      low: Math.min(...values),
+      avg: values.reduce((a, b) => a + b, 0) / values.length,
+      dataPoints: history.length,
+      history,
+      isAccurate: false,
+      isHypothetical: true
+    };
+  }
+};
+
+// ============ Purchase Date Based Performance Calculator ============
+const PurchaseDatePerformance = {
+  CACHE_KEY: 'portfolio_purchase_performance_cache',
+  CACHE_DURATION: 60 * 60 * 1000, // 1 hour
+
+  /**
+   * Calculate portfolio performance based on actual purchase dates
+   * This gives REAL performance, not hypothetical
+   */
+  async calculateAccuratePerformance(days = 30) {
+    const assets = PortfolioApp.getAssets();
+
+    // Filter assets that have both CoinGecko ID and purchase date
+    const trackedAssets = assets.filter(a =>
+      a.coingeckoId && a.purchaseDate
+    );
+
+    if (trackedAssets.length === 0) {
+      console.warn('No assets with purchase dates found. Add purchase dates to your assets!');
+      return null;
+    }
+
+    console.log(`Calculating accurate performance for ${trackedAssets.length} assets`);
+
+    // Determine date range
+    const endDate = new Date();
+    const startDate = new Date();
+
+    if (days === 'max' || days === 0) {
+      // Find earliest purchase date
+      const earliestPurchase = trackedAssets.reduce((earliest, asset) => {
+        const purchaseDate = new Date(asset.purchaseDate);
+        return purchaseDate < earliest ? purchaseDate : earliest;
+      }, new Date());
+      startDate.setTime(earliestPurchase.getTime());
+    } else {
+      startDate.setDate(startDate.getDate() - days);
+    }
+
+    // Calculate days between start and end
+    const totalDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+
+    // Fetch historical prices for each asset
+    const promises = trackedAssets.map(asset =>
+      this.fetchAssetPerformance(asset, startDate, totalDays)
+    );
+
+    const results = await Promise.all(promises);
+
+    // Aggregate portfolio values by date
+    const portfolioByDate = this.aggregatePortfolioHistory(results, startDate, totalDays);
+
+    // Convert to array and sort by date
+    const history = Object.values(portfolioByDate).sort((a, b) =>
+      new Date(a.date) - new Date(b.date)
+    );
+
+    console.log(`✓ Accurate performance calculated: ${history.length} data points`);
+
+    return history;
+  },
+
+  /**
+   * Fetch historical performance for a single asset
+   */
+  async fetchAssetPerformance(asset, startDate, days) {
+    const purchaseDate = new Date(asset.purchaseDate);
+    const balance = parseFloat(asset.balance || 0);
+
+    // Fetch historical prices from CoinGecko
+    const priceHistory = await HistoricalPriceAPI.fetchHistoricalPrices(
+      asset.coingeckoId,
+      days
+    );
+
+    if (!priceHistory) {
+      console.warn(`Failed to fetch prices for ${asset.name}`);
+      return { asset, priceHistory: [] };
+    }
+
+    // Filter prices to only include dates AFTER purchase
+    const relevantPrices = priceHistory.filter(point => {
+      const pointDate = new Date(point.date);
+      return pointDate >= purchaseDate;
+    });
+
+    // Add purchase date point if not in data
+    const purchaseDateStr = purchaseDate.toISOString().split('T')[0];
+    const hasPurchasePoint = relevantPrices.some(p => p.date === purchaseDateStr);
+
+    if (!hasPurchasePoint && asset.buyPrice) {
+      relevantPrices.unshift({
+        date: purchaseDateStr,
+        timestamp: purchaseDate.getTime(),
+        price: parseFloat(asset.buyPrice)
+      });
+    }
+
+    return {
+      asset,
+      priceHistory: relevantPrices,
+      balance,
+      purchaseDate: purchaseDateStr
+    };
+  },
+
+  /**
+   * Aggregate all assets into portfolio history
+   */
+  aggregatePortfolioHistory(results, startDate, days) {
+    const portfolioByDate = {};
+
+    results.forEach(({ asset, priceHistory, balance, purchaseDate }) => {
+      if (!priceHistory || priceHistory.length === 0) return;
+
+      priceHistory.forEach(({ date, timestamp, price }) => {
+        if (!portfolioByDate[date]) {
+          portfolioByDate[date] = {
+            date,
+            timestamp,
+            total: 0,
+            crypto: 0,
+            stocks: 0,
+            gold: 0,
+            breakdown: {},
+            isAccurate: true // Mark as accurate (not hypothetical)
+          };
+        }
+
+        const value = price * balance;
+        portfolioByDate[date].total += value;
+        portfolioByDate[date][asset.category] += value;
+        portfolioByDate[date].breakdown[asset.id] = {
+          value,
+          price,
+          balance,
+          name: asset.name,
+          purchaseDate // Include purchase date in breakdown
+        };
+      });
+    });
+
+    return portfolioByDate;
+  },
+
+  /**
+   * Calculate performance statistics
+   */
+  async calculateStats(days = 30) {
+    const history = await this.calculateAccuratePerformance(days);
 
     if (!history || history.length < 2) {
       return null;
@@ -761,6 +970,10 @@ const HistoricalPriceAPI = {
     const low = Math.min(...values);
     const avg = values.reduce((a, b) => a + b, 0) / values.length;
 
+    // Find dates of high and low
+    const highPoint = history.find(h => h.total === high);
+    const lowPoint = history.find(h => h.total === low);
+
     return {
       oldest,
       newest,
@@ -769,11 +982,65 @@ const HistoricalPriceAPI = {
       high,
       low,
       avg,
+      highDate: highPoint?.date,
+      lowDate: lowPoint?.date,
       dataPoints: history.length,
-      history
+      history,
+      isAccurate: true,
+      isHypothetical: false
+    };
+  },
+
+  /**
+   * Get performance for specific asset
+   */
+  async getAssetPerformance(assetId, days = 30) {
+    const asset = PortfolioApp.getAssets().find(a => a.id === assetId);
+
+    if (!asset || !asset.coingeckoId || !asset.purchaseDate) {
+      return null;
+    }
+
+    const startDate = new Date();
+    if (days !== 'max' && days !== 0) {
+      startDate.setDate(startDate.getDate() - days);
+    } else {
+      startDate.setTime(new Date(asset.purchaseDate).getTime());
+    }
+
+    const totalDays = Math.ceil((new Date() - startDate) / (1000 * 60 * 60 * 24));
+
+    const result = await this.fetchAssetPerformance(asset, startDate, totalDays);
+
+    if (!result.priceHistory || result.priceHistory.length === 0) {
+      return null;
+    }
+
+    const values = result.priceHistory.map(p => p.price * result.balance);
+    const oldest = values[0];
+    const newest = values[values.length - 1];
+
+    return {
+      asset: asset.name,
+      symbol: asset.symbol,
+      purchaseDate: asset.purchaseDate,
+      purchasePrice: parseFloat(asset.buyPrice),
+      currentPrice: result.priceHistory[result.priceHistory.length - 1].price,
+      balance: result.balance,
+      initialValue: oldest,
+      currentValue: newest,
+      change: newest - oldest,
+      changePercent: oldest > 0 ? ((newest - oldest) / oldest * 100) : 0,
+      history: result.priceHistory.map(p => ({
+        date: p.date,
+        price: p.price,
+        value: p.price * result.balance
+      }))
     };
   }
 };
+
+window.PurchaseDatePerformance = PurchaseDatePerformance;
 
 window.HistoricalPriceAPI = HistoricalPriceAPI;
 

@@ -267,10 +267,13 @@ const DOMUtils = {
       text: symbolText
     });
 
+    // Add purchase date and buy price info
     const buyPriceInfo = asset.buyPrice ? `Buy: $${asset.buyPrice}` : 'No buy price';
+    const purchaseDateInfo = asset.purchaseDate ? `Bought: ${asset.purchaseDate}` : 'No purchase date'; // ✨ NEW
+
     const balance = this.createElement('div', {
       className: 'asset-balance',
-      text: `Balance: ${asset.balance} • ${buyPriceInfo}`,
+      text: `Balance: ${asset.balance} • ${buyPriceInfo} • ${purchaseDateInfo}`, // ✨ UPDATED
       styles: { marginTop: '4px' }
     });
 
