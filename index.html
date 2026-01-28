@@ -557,6 +557,9 @@
         window.lastPortfolioData = data; // Cache for UI restoration
         updateUI(data);
         chart.update(data);
+        if (typeof updateHistoryChart === 'function') {
+          updateHistoryChart(currentPeriodDays);
+        }
       } catch (error) {
         console.error('Error refreshing data:', error);
       } finally {
@@ -905,7 +908,11 @@
           if (navigator.vibrate) navigator.vibrate(50);
 
           try {
-            await initDashboard(); // Reuse existing refresh logic
+            await initDashboard();
+            // Ensure UI update for specific assets if not covered by initDashboard
+            if (window.lastPortfolioData && typeof updatePortfolioDisplay === 'function') {
+              // updatePortfolioDisplay(window.lastPortfolioData);
+            }
             ToastManager.success('Updated');
           } catch (err) {
             ToastManager.error('Update failed');
@@ -1188,6 +1195,7 @@
       };
 
       canvas.ontouchend = () => hideChartTooltip(canvas);
+      canvas.ontouchcancel = () => hideChartTooltip(canvas);
     }
 
     function handleChartHover(e, canvas, points) {
