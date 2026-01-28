@@ -697,7 +697,7 @@ const HistoryTracker = {
 
 // ============ CoinStats Historical Price API ============
 const HistoricalPriceAPI = {
-  CACHE_KEY: 'portfolio_historical_cache_v9', // Invalidate old cache for aggregation fix
+  CACHE_KEY: 'portfolio_historical_cache_v10', // Invalidate old cache for aggregation fix
   CACHE_DURATION: 24 * 60 * 60 * 1000,
 
   // Rate limiting handled globally by apiRateLimiter
@@ -775,12 +775,15 @@ const HistoricalPriceAPI = {
       filtered.forEach(point => {
         // Snap to nearest interval (floor)
         const snapped = Math.floor(point.timestamp / intervalMs) * intervalMs;
+
+        point.timestampSnapped = snapped;
+        point.timestampOriginal = point.timestamp;
+
         point.timestamp = snapped;
-        // Keep date string consistent with snapped grid?
-        // Actually for 24H/1W we might cross midnight boundaries if we just keep original date.
-        // But for aggregation we rely on timestamp for isShortTerm.
-        // For tooltip, we want precise date.
-        point.date = new Date(snapped).toISOString();
+
+        // Keep date string consistent? Guide says: DON'T modify point.date
+        // But point.date is YYYY-MM-DD. 
+        // If we want tooltips to show time, we should rely on timestampOriginal.
       });
     }
 
@@ -803,12 +806,13 @@ const HistoricalPriceAPI = {
    * @param {string} coinId - CoinStats coin ID (e.g., "bitcoin")
    * @param {number|string} days - Number of days (1, 7, 30, 90, 180, 365, "max")
    */
-  async fetchHistoricalPrices(coinId, days) {
-    return this.fetchHistoricalPrices_impl(coinId, days);
+  async fetchHistoricalPrices(coinId, days, options = {}) {
+    return this.fetchHistoricalPrices_impl(coinId, days, options);
   },
 
   // Helper to allow cleaner reading (dummy wrapper, actual logic below)
-  async fetchHistoricalPrices_impl(coinId, days) {
+  async fetchHistoricalPrices_impl(coinId, days, options = {}) {
+    const { signal } = options;
     const cacheKey = `${coinId}_${days}`;
     const cache = this.getCache();
 
@@ -847,7 +851,7 @@ const HistoricalPriceAPI = {
         // CoinStats charts endpoint
         const response = await fetch(
           `${AppConfig.API.COINSTATS_BASE}/coins/${coinId}/charts?period=${period}`,
-          { headers }
+          { headers, signal }
         );
 
         if (!response.ok) {
@@ -935,7 +939,8 @@ const HistoricalPriceAPI = {
   /**
    * Batch fetch with delays
    */
-  async batchFetchHistoricalPrices(assets, days) {
+  async batchFetchHistoricalPrices(assets, days, options = {}) {
+    const { signal } = options;
     const cache = this.getCache();
     const results = {};
     const toFetch = [];
@@ -963,7 +968,7 @@ const HistoricalPriceAPI = {
       const identifier = asset.coinstatsId || asset.symbol.toLowerCase();
 
       try {
-        const priceHistory = await this.fetchHistoricalPrices(identifier, days);
+        const priceHistory = await this.fetchHistoricalPrices(identifier, days, options);
 
         results[asset.id] = {
           asset,
@@ -1047,14 +1052,16 @@ const HistoricalPriceAPI = {
   /**
    * Calculate performance stats
    */
-  async calculatePerformance(days = 30) {
+  async calculatePerformance(days = 30, options = {}) {
     // Try purchase date performance first
+    const { signal } = options;
     try {
-      const accuratePerf = await PurchaseDatePerformance.calculateStats(days);
+      const accuratePerf = await PurchaseDatePerformance.calculateStats(days, { signal });
       if (accuratePerf && accuratePerf.dataPoints >= 2) {
         return accuratePerf;
       }
     } catch (error) {
+      if (signal?.aborted) throw error; // Re-throw abort
       console.warn('Purchase date performance failed:', error);
     }
 
@@ -1148,7 +1155,8 @@ const PurchaseDatePerformance = {
   /**
    * Calculate accurate performance with batch loading
    */
-  async calculateAccuratePerformance(days = 30) {
+  async calculateAccuratePerformance(days = 30, options = {}) {
+    const { signal } = options;
     const assets = PortfolioApp.getAssets();
 
     const trackedAssets = assets.filter(a =>
@@ -1181,7 +1189,8 @@ const PurchaseDatePerformance = {
     // Use batch fetch from HistoricalPriceAPI
     const priceResults = await HistoricalPriceAPI.batchFetchHistoricalPrices(
       trackedAssets,
-      totalDays
+      totalDays,
+      { signal }
     );
 
     // Process each asset
@@ -1271,10 +1280,18 @@ const PurchaseDatePerformance = {
       priceHistory.forEach(({ date, timestamp, price }) => {
         // For short term, use specific timestamp key to preserve hourly points
         // For long term, stick to date string to aggregate daily
-        // CORRECTION: isShortTerm should be days <= 7 ? 
-        // If days <= 7, key by timestamp.
         const shouldUseTimestamp = days <= 7;
-        const effectiveKey = shouldUseTimestamp ? new Date(timestamp).toISOString() : date;
+        let effectiveKey;
+
+        if (shouldUseTimestamp) {
+          // Normalize to hourly buckets (or whatever resolution)
+          // Since we snapped in downsampleHistory, timestamp is already snapped.
+          // But to be safe against mixed data sources:
+          const hourBucket = Math.floor(timestamp / (3600 * 1000)) * 3600 * 1000;
+          effectiveKey = new Date(hourBucket).toISOString();
+        } else {
+          effectiveKey = date;
+        }
 
         if (!portfolioByDate[effectiveKey]) {
           portfolioByDate[effectiveKey] = {
@@ -1319,8 +1336,8 @@ const PurchaseDatePerformance = {
   /**
    * Calculate stats (unchanged)
    */
-  async calculateStats(days = 30) {
-    const history = await this.calculateAccuratePerformance(days);
+  async calculateStats(days = 30, options = {}) {
+    const history = await this.calculateAccuratePerformance(days, options);
 
     if (!history || history.length < 2) {
       return null;

@@ -263,6 +263,11 @@
     </div>
   </div>
 
+  <!-- Offline Indicator -->
+  <div id="offlineIndicator" class="offline-indicator">
+    <span>📡</span> No Internet Connection
+  </div>
+
   <div class="container">
     <!-- Header -->
     <header class="header">
@@ -533,6 +538,7 @@
     // Race condition control
     let isLoadingChart = false;
     let pendingChartUpdate = null;
+    let currentChartController = null; // NEW: AbortController
 
     // Performance limiting
     let lastDrawTime = 0;
@@ -940,12 +946,16 @@
     // chartData is reused
 
     async function updateHistoryChart(days) {
-      // Cancel pending update
-      if (pendingChartUpdate) {
-        pendingChartUpdate.cancelled = true;
+      if (isLoadingChart) {
+        console.log('⏳ Chart update already in progress...');
       }
-      const updateToken = { cancelled: false };
-      pendingChartUpdate = updateToken;
+      // Cancel any in-flight fetch
+      if (currentChartController) {
+        currentChartController.abort();
+      }
+      currentChartController = new AbortController();
+      isLoadingChart = true;
+
       currentPeriodDays = days;
 
       // Update active buttons
@@ -971,7 +981,12 @@
       const chartStats = document.getElementById('chartStats');
 
       if (historyEmpty) {
-        historyEmpty.innerHTML = '<div class="loading"><span class="loading-dots">Loading</span></div>';
+        historyEmpty.innerHTML = `
+            <div class="skeleton-chart-container">
+                <div class="skeleton-spinner"></div>
+                <div style="font-size: 0.9rem; color: var(--text-muted);">Loading data...</div>
+            </div>
+        `;
         historyEmpty.style.display = 'block';
       }
       if (chartStats) chartStats.style.display = 'none';
@@ -979,8 +994,10 @@
       const apiDays = days === 0 ? 'max' : days;
 
       try {
-        // Fetch performance data (now uses purchase dates automatically!)
-        const performance = await HistoricalPriceAPI.calculatePerformance(apiDays);
+        // Fetch performance data with signal
+        const performance = await HistoricalPriceAPI.calculatePerformance(apiDays, {
+          signal: currentChartController.signal
+        });
 
         // CACHE for Desktop Reset
         if (performance) {
@@ -1072,23 +1089,25 @@
         drawMiniChart(performance.history, 'heroMiniChart');
 
       } catch (error) {
-        if (!updateToken.cancelled) {
-          console.error('Error loading historical data:', error);
-          if (historyEmpty) {
-            historyEmpty.innerHTML = `
+        if (error.name === 'AbortError') {
+          console.log('⏹️ Chart update cancelled');
+          return;
+        }
+        console.error('Error loading historical data:', error);
+        if (historyEmpty) {
+          historyEmpty.innerHTML = `
             <div style="text-align: center; padding: 40px;">
               <div style="font-size: 2rem; margin-bottom: 8px;">⚠️</div>
               <div>Failed to load data</div>
               <div style="font-size: 0.8rem; margin-top: 4px;">${error.message}</div>
             </div>
           `;
-            historyEmpty.style.display = 'block';
-          }
+          historyEmpty.style.display = 'block';
         }
       } finally {
-        if (pendingChartUpdate === updateToken) {
+        if (currentChartController && !currentChartController.signal.aborted) {
           isLoadingChart = false;
-          pendingChartUpdate = null;
+          currentChartController = null;
         }
       }
     }
@@ -1100,6 +1119,11 @@
 
       // Prevent drawing on hidden/zero-sized canvas (Fixes IndexSizeError)
       if (canvas.clientWidth === 0 || canvas.clientHeight === 0) return;
+
+      // CLEANUP OLD LISTENERS
+      if (canvas._chartCleanup) {
+        canvas._chartCleanup();
+      }
 
       chartCanvas = canvas;
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -1182,41 +1206,47 @@
       canvas._baseImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
       canvas._ctx = ctx; // Store context for reuse
 
-      // Add mouse interaction
-      canvas.onmousemove = (e) => handleChartHover(e, canvas, points);
-      canvas.onmouseleave = () => hideChartTooltip(canvas);
-
-      // Touch interaction
-      // Android Touch Fix: Timeout-based cleanup (More Reliable)
-      let touchTimeout;
-
-      canvas.ontouchstart = (e) => {
-        if (e.target === canvas) e.preventDefault();
+      // Add mouse interaction with cleanup
+      const handlers = {
+        mousemove: (e) => handleChartHover(e, canvas, points),
+        mouseleave: () => hideChartTooltip(canvas),
+        touchstart: (e) => {
+          if (e.target === canvas) e.preventDefault();
+        },
+        touchmove: null, // assigned below
+        touchend: () => {
+          clearTimeout(touchTimeout);
+          hideChartTooltip(canvas);
+        },
+        touchcancel: () => {
+          clearTimeout(touchTimeout);
+          hideChartTooltip(canvas);
+        }
       };
 
-      canvas.ontouchmove = (e) => {
+      let touchTimeout;
+      handlers.touchmove = (e) => {
         if (e.target === canvas) e.preventDefault();
         const touch = e.touches[0];
-
-        // Clear existing timeout
         clearTimeout(touchTimeout);
-
         handleChartHover({ clientX: touch.clientX, clientY: touch.clientY }, canvas, points);
-
-        // Auto-reset after 150ms of no movement (finger left screen)
-        touchTimeout = setTimeout(() => {
-          hideChartTooltip(canvas);
-        }, 150);
+        touchTimeout = setTimeout(() => hideChartTooltip(canvas), 150);
       };
 
-      canvas.ontouchend = () => {
-        clearTimeout(touchTimeout);
-        hideChartTooltip(canvas);
-      };
+      // Attach new listeners
+      Object.entries(handlers).forEach(([event, handler]) => {
+        canvas.addEventListener(event, handler, { passive: false });
+      });
 
-      canvas.ontouchcancel = () => {
+      // Store cleanup function
+      canvas._chartCleanup = () => {
+        Object.entries(handlers).forEach(([event, handler]) => {
+          canvas.removeEventListener(event, handler);
+        });
         clearTimeout(touchTimeout);
-        hideChartTooltip(canvas);
+        delete canvas._chartPoints;
+        delete canvas._baseImage;
+        delete canvas._ctx;
       };
     }
 
@@ -1300,6 +1330,7 @@
       const dateEl = document.getElementById('heroScrubDate');
       const pnlAmountEl = document.getElementById('heroPnlAmount');
       const pnlPercentEl = document.getElementById('heroPnlPercent');
+      const pnlBadge = document.getElementById('heroPnlBadge');
 
       if (balanceEl) balanceEl.textContent = PortfolioApp.formatCurrency(data.total);
 
@@ -1314,7 +1345,7 @@
 
       const isPositive = change >= 0;
       const sign = isPositive ? '+' : '';
-      const color = isPositive ? 'var(--success)' : 'var(--danger)';
+      const color = isPositive ? 'var(--profit-text)' : 'var(--loss-text)';
 
       if (pnlAmountEl) {
         pnlAmountEl.textContent = `${sign}${PortfolioApp.formatCurrency(change)}`;
@@ -1328,12 +1359,16 @@
         pnlPercentEl.style.display = '';
       }
 
+      if (pnlBadge) {
+        pnlBadge.className = `mobile-pnl-badge ${isPositive ? 'positive' : 'negative'}`;
+      }
+
       // Show PnL container
       if (pnlContainer) pnlContainer.style.display = 'flex';
 
       // Show Date
       if (dateEl) {
-        const date = new Date(data.date);
+        const date = new Date(data.timestampOriginal || data.timestamp || data.date);
         dateEl.textContent = date.toLocaleDateString('en-US', {
           weekday: 'short',
           month: 'short',
@@ -1398,7 +1433,7 @@
 
       // Update Date
       if (dateEl) {
-        const date = new Date(data.date || data.timestamp);
+        const date = new Date(data.timestampOriginal || data.timestamp || data.date);
         dateEl.textContent = date.toLocaleDateString('en-US', {
           weekday: 'short',
           year: 'numeric',
@@ -1481,7 +1516,7 @@
       const dateEl = tooltip.querySelector('.chart-tooltip-date');
       const valueEl = tooltip.querySelector('.chart-tooltip-value');
 
-      const date = new Date(point.data.date);
+      const date = new Date(point.data.timestampOriginal || point.data.timestamp || point.data.date);
       dateEl.textContent = date.toLocaleDateString('en-US', {
         month: 'short', day: 'numeric', year: 'numeric'
       });
@@ -1539,7 +1574,13 @@
       if (!canvas) return;
 
       // Preventdrawing on hidden/zero-sized canvas
+      // Prevent drawing on hidden/zero-sized canvas (Fixes IndexSizeError)
       if (canvas.clientWidth === 0 || canvas.clientHeight === 0) return;
+
+      // CLEANUP OLD LISTENERS
+      if (canvas._chartCleanup) {
+        canvas._chartCleanup();
+      }
 
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
       const rect = canvas.parentElement.getBoundingClientRect();
@@ -1613,47 +1654,68 @@
       canvas._baseImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
       canvas._ctx = ctx;
 
-      // Mouse interaction
-      canvas.onmousemove = (e) => handleChartHover(e, canvas, points);
-      canvas.onmouseleave = () => hideChartTooltip(canvas);
-
-      // Touch interaction
-      // Android Touch Fix: Timeout-based cleanup (More Reliable)
-      let touchTimeout;
-
-      canvas.ontouchstart = (e) => {
-        if (e.target === canvas) e.preventDefault();
+      // Add mouse interaction with cleanup
+      const handlers = {
+        mousemove: (e) => handleChartHover(e, canvas, points),
+        mouseleave: () => hideChartTooltip(canvas),
+        touchstart: (e) => {
+          if (e.target === canvas) e.preventDefault();
+        },
+        touchmove: null, // assigned below
+        touchend: () => {
+          clearTimeout(touchTimeout);
+          hideChartTooltip(canvas);
+        },
+        touchcancel: () => {
+          clearTimeout(touchTimeout);
+          hideChartTooltip(canvas);
+        }
       };
 
-      canvas.ontouchmove = (e) => {
+      let touchTimeout;
+      handlers.touchmove = (e) => {
         if (e.target === canvas) e.preventDefault();
         const touch = e.touches[0];
-
-        // Clear existing timeout
         clearTimeout(touchTimeout);
-
         handleChartHover({ clientX: touch.clientX, clientY: touch.clientY }, canvas, points);
-
-        // Auto-reset after 150ms of no movement
-        touchTimeout = setTimeout(() => {
-          hideChartTooltip(canvas);
-        }, 150);
+        touchTimeout = setTimeout(() => hideChartTooltip(canvas), 150);
       };
 
-      canvas.ontouchend = () => {
-        clearTimeout(touchTimeout);
-        hideChartTooltip(canvas);
-      };
+      // Attach new listeners
+      Object.entries(handlers).forEach(([event, handler]) => {
+        canvas.addEventListener(event, handler, { passive: false });
+      });
 
-      canvas.ontouchcancel = () => {
+      // Store cleanup function
+      canvas._chartCleanup = () => {
+        Object.entries(handlers).forEach(([event, handler]) => {
+          canvas.removeEventListener(event, handler);
+        });
         clearTimeout(touchTimeout);
-        hideChartTooltip(canvas);
+        delete canvas._chartPoints;
+        delete canvas._baseImage;
+        delete canvas._ctx;
       };
     }
 
     // Offline Detection
-    window.addEventListener('online', () => ToastManager.success('Back online!'));
-    window.addEventListener('offline', () => ToastManager.warning('You are offline'));
+    const offlineIndicator = document.getElementById('offlineIndicator');
+
+    function updateOnlineStatus() {
+      if (navigator.onLine) {
+        offlineIndicator.classList.remove('visible');
+        ToastManager.success('Back online!');
+      } else {
+        offlineIndicator.classList.add('visible');
+        ToastManager.warning('You are offline');
+      }
+    }
+
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+
+    // Initial check
+    if (!navigator.onLine) updateOnlineStatus();
 
     // Initialize on load
     document.addEventListener('DOMContentLoaded', () => {
@@ -1683,11 +1745,16 @@
 
       // Handle resize for line charts
       // Handle resize for line charts
+      // Handle resize for line charts
+      let resizeTimeout;
       window.addEventListener('resize', () => {
-        if (chartData && chartData.length > 0) {
-          drawEnhancedLineChart(chartData, 'historyChart');
-          drawMiniChart(chartData, 'heroMiniChart');
-        }
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+          if (chartData && chartData.length > 0) {
+            drawEnhancedLineChart(chartData, 'historyChart');
+            drawMiniChart(chartData, 'heroMiniChart');
+          }
+        }, 150);
       });
 
       // Register Service Worker (only on http/https)
