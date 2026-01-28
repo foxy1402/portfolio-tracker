@@ -845,7 +845,11 @@
         if (dataBadge) {
           dataBadge.style.display = 'inline-block';
 
-          if (performance.isAccurate) {
+          if (performance.incomplete) {
+            dataBadge.className = 'chart-data-badge estimated';
+            dataBadge.textContent = '⚠ Partial Data';
+            dataBadge.title = 'Some assets failed to load due to API limits';
+          } else if (performance.isAccurate) {
             dataBadge.className = 'chart-data-badge real';
             dataBadge.textContent = '✓ Accurate';
             dataBadge.title = 'Based on your actual purchase dates';

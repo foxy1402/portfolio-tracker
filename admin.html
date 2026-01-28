@@ -157,6 +157,25 @@
             <div class="admin-grid">
                 <!-- Left Column: Input Forms -->
                 <div style="display: flex; flex-direction: column; gap: var(--spacing-lg);">
+                    <!-- API Key Configuration -->
+                    <div class="card fade-in" id="apiKeyCard">
+                        <div class="card-title">🔑 API Configuration (CryptoCompare)</div>
+                        <div class="form-group">
+                            <label class="form-label" for="apiKeyInput">API Key</label>
+                            <input type="password" class="form-input" id="apiKeyInput"
+                                placeholder="Paste your API key here">
+                            <div class="form-hint">
+                                Get a free key at <a href="https://min-api.cryptocompare.com" target="_blank"
+                                    style="color: var(--accent-crypto);">min-api.cryptocompare.com</a>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn btn-primary" id="saveApiKeyBtn" style="flex: 1;">Save Key</button>
+                            <button class="btn btn-danger" id="clearApiKeyBtn" style="display: none;">Remove</button>
+                        </div>
+                        <div id="apiKeyStatus" style="margin-top: 10px; font-size: 0.9rem;"></div>
+                    </div>
+
                     <!-- Add Asset Form -->
                     <div class="card fade-in">
                         <div class="card-title" id="formTitle">Add New Asset</div>
@@ -189,25 +208,16 @@
 
                             <!-- Symbol -->
                             <div class="form-group">
-                                <label class="form-label" for="assetSymbol">Symbol</label>
+                                <label class="form-label" for="assetSymbol">
+                                    Symbol
+                                    <span style="color: var(--text-muted); font-weight: normal;">(required for
+                                        API)</span>
+                                </label>
                                 <input type="text" class="form-input" id="assetSymbol"
-                                    placeholder="e.g., BTC, TSLA, PAXG">
+                                    placeholder="e.g., BTC, ETH, AAPL, PAXG" required>
                             </div>
 
-                            <!-- CoinGecko ID -->
-                            <div class="form-group">
-                                <label class="form-label" for="coingeckoId">
-                                    CoinGecko ID
-                                    <span style="color: var(--text-muted); font-weight: normal;">(for auto price)</span>
-                                </label>
-                                <input type="text" class="form-input" id="coingeckoId"
-                                    placeholder="e.g., bitcoin, pax-gold, tether-gold">
-                                <div class="form-hint">
-                                    Find IDs at <a href="https://www.coingecko.com" target="_blank"
-                                        style="color: var(--accent-crypto);">coingecko.com</a>
-                                    (URL: coingecko.com/en/coins/<strong>bitcoin</strong>)
-                                </div>
-                            </div>
+                            <!-- Removed CoinGecko ID field (using Symbol for lookup) -->
 
                             <!-- Manual Price (alternative to CoinGecko) -->
                             <div class="form-group">
@@ -320,6 +330,23 @@
                         </div>
                     </div>
 
+                    <!-- Cache Management -->
+                    <div class="card fade-in">
+                        <div class="card-title">🗄️ Cache Management</div>
+                        <div id="cacheStats"
+                            style="margin-bottom: 12px; font-size: 0.9rem; color: var(--text-secondary);">
+                            Click 'Check Stats' to view cache usage.
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn btn-secondary" onclick="showCacheStats()">
+                                Check Stats
+                            </button>
+                            <button class="btn btn-danger" onclick="clearHistoricalCache()">
+                                Clear Cache
+                            </button>
+                        </div>
+                    </div>
+
                 </div>
             </div>
 
@@ -331,18 +358,18 @@
                         <strong style="color: var(--accent-crypto);">Crypto:</strong>
                         <ul
                             style="list-style: none; color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.5rem;">
-                            <li>Bitcoin → <code style="color: var(--text-primary);">bitcoin</code></li>
-                            <li>Ethereum → <code style="color: var(--text-primary);">ethereum</code></li>
-                            <li>Solana → <code style="color: var(--text-primary);">solana</code></li>
-                            <li>BNB → <code style="color: var(--text-primary);">binancecoin</code></li>
+                            <li>Bitcoin → <code style="color: var(--text-primary);">BTC</code></li>
+                            <li>Ethereum → <code style="color: var(--text-primary);">ETH</code></li>
+                            <li>Solana → <code style="color: var(--text-primary);">SOL</code></li>
+                            <li>BNB → <code style="color: var(--text-primary);">BNB</code></li>
                         </ul>
                     </div>
                     <div>
                         <strong style="color: var(--accent-gold);">Tokenized Gold:</strong>
                         <ul
                             style="list-style: none; color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.5rem;">
-                            <li>PAX Gold → <code style="color: var(--text-primary);">pax-gold</code></li>
-                            <li>Tether Gold → <code style="color: var(--text-primary);">tether-gold</code></li>
+                            <li>PAX Gold → <code style="color: var(--text-primary);">PAXG</code></li>
+                            <li>Tether Gold → <code style="color: var(--text-primary);">XAUT</code></li>
                         </ul>
                     </div>
                     <div>
@@ -375,11 +402,68 @@
             setupAuth();
             setupCategorySelector();
             setupForm();
+            setupApiKey(); // ✨ NEW
             setupSync();
             setupExport();
             renderAssetsList();
-            renderAssetsList();
             setupBulkUpdate();
+        }
+
+        // ============ API Key Management ============
+        function setupApiKey() {
+            const input = document.getElementById('apiKeyInput');
+            const saveBtn = document.getElementById('saveApiKeyBtn');
+            const clearBtn = document.getElementById('clearApiKeyBtn');
+            const status = document.getElementById('apiKeyStatus');
+
+            const updateUI = () => {
+                const key = APIKeyManager.get();
+                if (key) {
+                    input.value = '••••••••••••••••'; // Masked
+                    input.disabled = true;
+                    saveBtn.style.display = 'none';
+                    clearBtn.style.display = 'block';
+                    status.textContent = '✓ API Key configured';
+                    status.style.color = 'var(--accent-stocks)';
+                } else {
+                    input.value = '';
+                    input.disabled = false;
+                    saveBtn.style.display = 'block';
+                    clearBtn.style.display = 'none';
+                    status.textContent = '';
+                }
+            };
+
+            // Initial UI State
+            updateUI();
+
+            saveBtn.addEventListener('click', async () => {
+                const key = input.value.trim();
+                if (!key) return;
+
+                status.textContent = 'Validating...';
+                status.style.color = 'var(--text-secondary)';
+
+                const result = await APIKeyManager.validate(key);
+
+                if (result.valid) {
+                    APIKeyManager.set(key);
+                    updateUI();
+                    ToastManager.success('API Key saved successfully!');
+                } else {
+                    status.textContent = '✗ ' + result.error;
+                    status.style.color = '#ff5050';
+                    ToastManager.error('Invalid API Key');
+                }
+            });
+
+            clearBtn.addEventListener('click', () => {
+                if (confirm('Remove API Key? You will need to re-enter it to fetch prices.')) {
+                    APIKeyManager.clear();
+                    updateUI();
+                    ToastManager.info('API Key removed');
+                }
+            });
         }
 
         // ============ Bulk Update ============
@@ -565,10 +649,9 @@
             const asset = {
                 name: document.getElementById('assetName').value.trim(),
                 symbol: document.getElementById('assetSymbol').value.trim().toUpperCase(),
-                coingeckoId: document.getElementById('coingeckoId').value.trim().toLowerCase(),
                 manualPrice: document.getElementById('manualPrice').value || null,
                 buyPrice: document.getElementById('buyPrice').value || null,
-                purchaseDate: document.getElementById('purchaseDate').value || null, // ✨ NEW
+                purchaseDate: document.getElementById('purchaseDate').value || null,
                 balance: document.getElementById('assetBalance').value,
                 iconUrl: document.getElementById('iconUrl').value.trim() || null,
                 notes: document.getElementById('assetNotes').value.trim() || null,
@@ -601,10 +684,9 @@
             // Fill form
             document.getElementById('assetName').value = asset.name;
             document.getElementById('assetSymbol').value = asset.symbol || '';
-            document.getElementById('coingeckoId').value = asset.coingeckoId || '';
             document.getElementById('manualPrice').value = asset.manualPrice || '';
             document.getElementById('buyPrice').value = asset.buyPrice || '';
-            document.getElementById('purchaseDate').value = asset.purchaseDate || ''; // ✨ NEW
+            document.getElementById('purchaseDate').value = asset.purchaseDate || '';
             document.getElementById('assetBalance').value = asset.balance;
             document.getElementById('iconUrl').value = asset.iconUrl || '';
             document.getElementById('assetNotes').value = asset.notes || '';
@@ -663,14 +745,13 @@
                 return;
             }
 
-            const headers = ['Name', 'Symbol', 'Category', 'Balance', 'Buy Price', 'CoinGecko ID', 'Notes'];
+            const headers = ['Name', 'Symbol', 'Category', 'Balance', 'Buy Price', 'Notes'];
             const rows = assets.map(a => [
                 a.name,
                 a.symbol || '',
                 a.category,
                 a.balance,
                 a.buyPrice || '',
-                a.coingeckoId || '',
                 (a.notes || '').replace(/,/g, ';')
             ]);
 
@@ -733,6 +814,37 @@
                     container.appendChild(item);
                 });
             });
+        }
+
+        // ============ Cache Management ============
+        function showCacheStats() {
+            if (typeof HistoricalPriceAPI === 'undefined') {
+                ToastManager.error('Historical API not loaded');
+                return;
+            }
+            const stats = HistoricalPriceAPI.getCacheStats();
+            const container = document.getElementById('cacheStats');
+            if (container) {
+                container.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                        <span>Entries:</span>
+                        <strong style="color: var(--text-primary);">${stats.entries}</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span>Size:</span>
+                        <strong style="color: var(--text-primary);">${stats.sizeKB} KB</strong>
+                    </div>
+                `;
+            }
+            ToastManager.info(`Cache has ${stats.entries} entries`);
+        }
+
+        function clearHistoricalCache() {
+            if (confirm('Clear all historical price cache? (This will trigger new API calls next time)')) {
+                localStorage.removeItem('portfolio_historical_cache_v3');
+                showCacheStats();
+                ToastManager.success('Cache cleared!');
+            }
         }
 
         // Initialize on load

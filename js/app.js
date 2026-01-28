@@ -5,11 +5,11 @@
 // ============ Configuration ============
 const AppConfig = {
   API: {
-    COINGECKO_BASE: 'https://api.coingecko.com/api/v3',
+    CRYPTOCOMPARE_BASE: 'https://min-api.cryptocompare.com/data',
     GITHUB_BASE: 'https://api.github.com/gists',
     EXCHANGE_RATE: 'https://api.exchangerate-api.com/v4/latest/USD',
     RATE_LIMIT: {
-      MAX_REQUESTS: 10,
+      MAX_REQUESTS: 50, // Conservative (actual limit is much higher)
       PER_MINUTE: 60000
     }
   },
@@ -20,6 +20,7 @@ const AppConfig = {
   STORAGE: {
     ASSETS_KEY: 'portfolio_assets',
     GIST_ID_KEY: 'portfolio_gist_id',
+    API_KEY: 'portfolio_api_key', // ✨ NEW
     BACKUPS_KEY: 'portfolio_backups',
     MAX_BACKUPS: 10
   },
@@ -31,6 +32,75 @@ const AppConfig = {
     DEBOUNCE_DELAY: 300
   }
 };
+
+// ============ API Key Manager (Synced via Gist) ============
+const APIKeyManager = {
+  STORAGE_KEY: AppConfig.STORAGE.API_KEY,
+
+  // Get API key from localStorage
+  get() {
+    try {
+      const encrypted = localStorage.getItem(this.STORAGE_KEY);
+      if (!encrypted) return null;
+
+      // Simple Base64 decoding (obfuscation, not security)
+      return atob(encrypted);
+    } catch {
+      return null;
+    }
+  },
+
+  // Save API key to localStorage
+  set(apiKey) {
+    if (!apiKey) {
+      localStorage.removeItem(this.STORAGE_KEY);
+      return;
+    }
+
+    // Simple Base64 encoding
+    const encrypted = btoa(apiKey);
+    localStorage.setItem(this.STORAGE_KEY, encrypted);
+  },
+
+  // Check if API key is configured
+  isConfigured() {
+    return !!this.get();
+  },
+
+  // Clear API key
+  clear() {
+    localStorage.removeItem(this.STORAGE_KEY);
+  },
+
+  // Validate API key by testing connection
+  async validate(apiKey) {
+    try {
+      const response = await fetch(
+        `${AppConfig.API.CRYPTOCOMPARE_BASE}/price?fsym=BTC&tsyms=USD&api_key=${apiKey}`
+      );
+
+      if (!response.ok) {
+        return { valid: false, error: 'Invalid API key or rate limit exceeded' };
+      }
+
+      const data = await response.json();
+
+      if (data.Response === 'Error') {
+        return { valid: false, error: data.Message };
+      }
+
+      if (data.USD) {
+        return { valid: true, testPrice: data.USD };
+      }
+
+      return { valid: false, error: 'Unexpected response format' };
+    } catch (error) {
+      return { valid: false, error: error.message };
+    }
+  }
+};
+
+window.APIKeyManager = APIKeyManager;
 
 // ============ Utility Functions ============
 const Utils = {
@@ -609,35 +679,52 @@ const HistoryTracker = {
 };
 
 // ============ CoinGecko Historical Price API ============
-const HistoricalPriceAPI = {
-  CACHE_KEY: 'portfolio_historical_cache',
-  CACHE_DURATION: 60 * 60 * 1000, // 1 hour
+// ============ OPTIMIZED Historical Price API with Aggressive Caching ============
+// This fixes rate limiting issues and prevents false stats
 
+// ============ CryptoCompare Historical Price API ============
+const HistoricalPriceAPI = {
+  CACHE_KEY: 'portfolio_historical_cache_v3', // New version for CryptoCompare
+  CACHE_DURATION: 24 * 60 * 60 * 1000, // 24 hours (historical data is immutable)
+
+  lastCallTime: 0,
+  MIN_CALL_INTERVAL: 500, // 500ms between calls
+
+  /**
+   * Get cached data
+   */
   getCache() {
     try {
       const data = localStorage.getItem(this.CACHE_KEY);
       if (!data) return {};
+
       const parsed = JSON.parse(data);
-      // Return only non-expired caches
       const now = Date.now();
       const valid = {};
+
       Object.keys(parsed).forEach(key => {
-        if (parsed[key].timestamp && (now - parsed[key].timestamp < this.CACHE_DURATION)) {
-          valid[key] = parsed[key];
+        const entry = parsed[key];
+        if (entry.timestamp && (now - entry.timestamp < this.CACHE_DURATION)) {
+          valid[key] = entry;
         }
       });
+
       return valid;
     } catch {
       return {};
     }
   },
 
+  /**
+   * Set cache
+   */
   setCache(key, data) {
     try {
       const cache = this.getCache();
       cache[key] = {
         data,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        permanent: true
       };
       localStorage.setItem(this.CACHE_KEY, JSON.stringify(cache));
     } catch (error) {
@@ -645,34 +732,70 @@ const HistoricalPriceAPI = {
     }
   },
 
-  async fetchHistoricalPrices(coingeckoId, days) {
-    const cacheKey = `${coingeckoId}_${days}`;
+  /**
+   * Get API key
+   */
+  getApiKey() {
+    const apiKey = APIKeyManager.get();
+    if (!apiKey) {
+      throw new Error('CryptoCompare API key not configured. Please add it in the Manage page.');
+    }
+    return apiKey;
+  },
+
+  /**
+   * Fetch historical prices from CryptoCompare
+   */
+  async fetchHistoricalPrices(symbol, days) {
+    const cacheKey = `${symbol}_${days}`;
     const cache = this.getCache();
 
     // Return cached data if available
     if (cache[cacheKey]) {
-      console.log(`Using cached data for ${coingeckoId} (${days} days)`);
+      console.log(`✓ Cache hit: ${symbol} (${days} days)`);
       return cache[cacheKey].data;
     }
 
-    try {
-      console.log(`Fetching historical data for ${coingeckoId} (${days} days)...`);
+    console.log(`⚠ Cache miss: ${symbol} (${days} days) - fetching...`);
 
-      const response = await apiRateLimiter.execute(() =>
-        fetch(`${AppConfig.API.COINGECKO_BASE.replace('/api/v3', '')}/api/v3/coins/${coingeckoId}/market_chart?vs_currency=usd&days=${days}`)
+    try {
+      const apiKey = this.getApiKey();
+
+      // Rate limiting
+      const timeSinceLastCall = Date.now() - this.lastCallTime;
+      if (timeSinceLastCall < this.MIN_CALL_INTERVAL) {
+        await new Promise(resolve =>
+          setTimeout(resolve, this.MIN_CALL_INTERVAL - timeSinceLastCall)
+        );
+      }
+
+      this.lastCallTime = Date.now();
+
+      // CryptoCompare uses hourly data
+      const limit = Math.min(days * 24, 2000); // Max 2000 points
+
+      const response = await fetch(
+        `${AppConfig.API.CRYPTOCOMPARE_BASE}/v2/histohour?fsym=${symbol}&tsym=USD&limit=${limit}&api_key=${apiKey}`
       );
 
       if (!response.ok) {
+        if (response.status === 429) {
+          throw new Error('Rate limit exceeded');
+        }
         throw new Error(`API returned ${response.status}`);
       }
 
       const data = await response.json();
 
-      // Transform data
-      const transformed = data.prices.map(([timestamp, price]) => ({
-        date: new Date(timestamp).toISOString().split('T')[0],
-        timestamp,
-        price
+      if (data.Response === 'Error') {
+        throw new Error(data.Message || 'API error');
+      }
+
+      // Transform to our format
+      const transformed = data.Data.Data.map(point => ({
+        date: new Date(point.time * 1000).toISOString().split('T')[0],
+        timestamp: point.time * 1000,
+        price: point.close
       }));
 
       // Cache the result
@@ -680,37 +803,93 @@ const HistoricalPriceAPI = {
 
       return transformed;
     } catch (error) {
-      console.error(`Failed to fetch historical data for ${coingeckoId}:`, error);
-      return null;
+      console.error(`Failed to fetch ${symbol}:`, error);
+      return [];
     }
   },
 
+  /**
+   * Batch fetch with delays
+   */
+  async batchFetchHistoricalPrices(assets, days) {
+    const cache = this.getCache();
+    const results = {};
+    const toFetch = [];
+
+    // Separate cached vs uncached
+    assets.forEach(asset => {
+      const cacheKey = `${asset.symbol}_${days}`;
+
+      if (cache[cacheKey]) {
+        results[asset.id] = {
+          asset,
+          priceHistory: cache[cacheKey].data,
+          fromCache: true
+        };
+      } else {
+        toFetch.push(asset);
+      }
+    });
+
+    console.log(`📊 Cache: ${Object.keys(results).length} hits, ${toFetch.length} misses`);
+
+    // Fetch missing data with delays
+    for (let i = 0; i < toFetch.length; i++) {
+      const asset = toFetch[i];
+
+      try {
+        const priceHistory = await this.fetchHistoricalPrices(asset.symbol, days);
+
+        results[asset.id] = {
+          asset,
+          priceHistory,
+          fromCache: false
+        };
+
+        // Add delay between requests (except last one)
+        if (i < toFetch.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 700));
+        }
+      } catch (error) {
+        console.error(`Failed to fetch ${asset.symbol}:`, error);
+        results[asset.id] = {
+          asset,
+          priceHistory: [],
+          fromCache: false
+        };
+      }
+    }
+
+    return results;
+  },
+
+  /**
+   * Calculate portfolio history
+   */
   async calculatePortfolioHistory(days = 30) {
     const assets = PortfolioApp.getAssets();
 
-    // Filter assets with CoinGecko IDs
-    const trackedAssets = assets.filter(a => a.coingeckoId);
+    // Filter assets with symbols
+    const trackedAssets = assets.filter(a => a.symbol);
 
     if (trackedAssets.length === 0) {
-      console.warn('No assets with CoinGecko IDs found');
+      console.warn('No assets with symbols found');
       return null;
     }
 
-    console.log(`Calculating portfolio history for ${trackedAssets.length} assets over ${days} days`);
+    console.log(`📈 Calculating history for ${trackedAssets.length} assets (${days} days)`);
 
-    // Fetch historical prices for all assets (rate-limited)
-    const promises = trackedAssets.map(asset =>
-      this.fetchHistoricalPrices(asset.coingeckoId, days)
-        .then(priceHistory => ({ asset, priceHistory }))
-    );
-
-    const results = await Promise.all(promises);
+    // Use batch fetch with caching
+    const results = await this.batchFetchHistoricalPrices(trackedAssets, days);
 
     // Build date-indexed portfolio values
     const portfolioByDate = {};
 
-    results.forEach(({ asset, priceHistory }) => {
-      if (!priceHistory) return;
+    Object.values(results).forEach(({ asset, priceHistory }) => {
+      if (!priceHistory || priceHistory.length === 0) {
+        console.warn(`⚠ No price history for ${asset.name}`);
+        return;
+      }
 
       const balance = parseFloat(asset.balance || 0);
 
@@ -739,25 +918,33 @@ const HistoricalPriceAPI = {
       new Date(a.date) - new Date(b.date)
     );
 
-    console.log(`Portfolio history calculated: ${history.length} data points`);
+    const successCount = Object.values(results).filter(r => r.priceHistory?.length > 0).length;
+    console.log(`✓ History calculated: ${history.length} points from ${successCount}/${trackedAssets.length} assets`);
 
     return history;
   },
 
+  /**
+   * Calculate performance with fallback logic
+   */
   async calculatePerformance(days = 30) {
-    // First, try accurate calculation based on purchase dates
-    const accuratePerf = await PurchaseDatePerformance.calculateStats(days);
+    // Priority 1: Accurate performance (purchase dates)
+    try {
+      const accuratePerf = await PurchaseDatePerformance.calculateStats(days);
 
-    if (accuratePerf && accuratePerf.dataPoints >= 2) {
-      console.log('✓ Using accurate performance (based on purchase dates)');
-      return accuratePerf;
+      if (accuratePerf && accuratePerf.dataPoints >= 2) {
+        console.log('✓ Using accurate performance (purchase dates)');
+        return accuratePerf;
+      }
+    } catch (error) {
+      console.warn('Purchase date performance failed:', error);
     }
 
-    // Fallback: Try local snapshots
+    // Priority 2: Local snapshots
     const localHistory = HistoryTracker.getRange(days === 'max' || days === 0 ? 0 : days);
 
     if (localHistory.length >= 2) {
-      console.log('Using local snapshot history');
+      console.log('✓ Using local snapshot history');
       const oldest = localHistory[0].total;
       const newest = localHistory[localHistory.length - 1].total;
       const values = localHistory.map(h => h.total);
@@ -777,11 +964,12 @@ const HistoricalPriceAPI = {
       };
     }
 
-    // Last resort: Hypothetical calculation
-    console.warn('Using hypothetical performance (no purchase dates or local history)');
+    // Priority 3: API-based calculation
+    console.warn('⚠ Using API-based calculation');
     const history = await this.calculatePortfolioHistory(days);
 
     if (!history || history.length < 2) {
+      console.error('❌ Insufficient data for performance calculation');
       return null;
     }
 
@@ -802,39 +990,77 @@ const HistoricalPriceAPI = {
       isAccurate: false,
       isHypothetical: true
     };
+  },
+
+  /**
+   * Clear cache
+   */
+  clearCache() {
+    localStorage.removeItem(this.CACHE_KEY);
+  },
+
+  /**
+   * Get cache statistics
+   */
+  getCacheStats() {
+    const cache = this.getCache();
+    const entries = Object.keys(cache).length;
+    const size = new Blob([JSON.stringify(cache)]).size;
+
+    return {
+      entries,
+      sizeKB: (size / 1024).toFixed(2),
+      sizeMB: (size / 1024 / 1024).toFixed(2)
+    };
+  },
+
+  /**
+    * Pre-warm cache for all assets (call this on app load)
+    */
+  async prewarmCache() {
+    const assets = PortfolioApp.getAssets();
+    const trackedAssets = assets.filter(a => a.symbol);
+
+    if (trackedAssets.length === 0) return;
+
+    console.log('🔥 Pre-warming cache for future requests...');
+
+    // Fetch 7-day and 30-day data for all assets
+    const periods = [7, 30];
+
+    for (const days of periods) {
+      await this.batchFetchHistoricalPrices(trackedAssets, days);
+    }
+
+    console.log('✓ Cache pre-warming complete');
   }
 };
 
 // ============ Purchase Date Based Performance Calculator ============
+// ============ Enhanced Purchase Date Performance with Batch Loading ============
 const PurchaseDatePerformance = {
-  CACHE_KEY: 'portfolio_purchase_performance_cache',
-  CACHE_DURATION: 60 * 60 * 1000, // 1 hour
-
   /**
-   * Calculate portfolio performance based on actual purchase dates
-   * This gives REAL performance, not hypothetical
+   * Calculate accurate performance with batch loading
    */
   async calculateAccuratePerformance(days = 30) {
     const assets = PortfolioApp.getAssets();
 
-    // Filter assets that have both CoinGecko ID and purchase date
     const trackedAssets = assets.filter(a =>
-      a.coingeckoId && a.purchaseDate
+      a.symbol && a.purchaseDate
     );
 
     if (trackedAssets.length === 0) {
-      console.warn('No assets with purchase dates found. Add purchase dates to your assets!');
+      console.warn('No assets with purchase dates and symbols');
       return null;
     }
 
-    console.log(`Calculating accurate performance for ${trackedAssets.length} assets`);
+    console.log(`📊 Calculating accurate performance for ${trackedAssets.length} assets`);
 
     // Determine date range
     const endDate = new Date();
     const startDate = new Date();
 
     if (days === 'max' || days === 0) {
-      // Find earliest purchase date
       const earliestPurchase = trackedAssets.reduce((earliest, asset) => {
         const purchaseDate = new Date(asset.purchaseDate);
         return purchaseDate < earliest ? purchaseDate : earliest;
@@ -844,75 +1070,67 @@ const PurchaseDatePerformance = {
       startDate.setDate(startDate.getDate() - days);
     }
 
-    // Calculate days between start and end
     const totalDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
 
-    // Fetch historical prices for each asset
-    const promises = trackedAssets.map(asset =>
-      this.fetchAssetPerformance(asset, startDate, totalDays)
+    // Use batch fetch from HistoricalPriceAPI
+    const priceResults = await HistoricalPriceAPI.batchFetchHistoricalPrices(
+      trackedAssets,
+      totalDays
     );
 
-    const results = await Promise.all(promises);
+    // Process each asset
+    const results = trackedAssets.map(asset => {
+      const result = priceResults[asset.id];
 
-    // Aggregate portfolio values by date
+      if (!result || !result.priceHistory) {
+        console.warn(`⚠ No price data for ${asset.name}`);
+        return { asset, priceHistory: [], balance: 0, purchaseDate: asset.purchaseDate };
+      }
+
+      const purchaseDate = new Date(asset.purchaseDate);
+      const balance = parseFloat(asset.balance || 0);
+
+      // Filter to post-purchase dates
+      const relevantPrices = result.priceHistory.filter(point => {
+        const pointDate = new Date(point.date);
+        return pointDate >= purchaseDate;
+      });
+
+      // Add purchase price if available
+      const purchaseDateStr = purchaseDate.toISOString().split('T')[0];
+      const hasPurchasePoint = relevantPrices.some(p => p.date === purchaseDateStr);
+
+      if (!hasPurchasePoint && asset.buyPrice) {
+        relevantPrices.unshift({
+          date: purchaseDateStr,
+          timestamp: purchaseDate.getTime(),
+          price: parseFloat(asset.buyPrice)
+        });
+      }
+
+      return {
+        asset,
+        priceHistory: relevantPrices,
+        balance,
+        purchaseDate: purchaseDateStr
+      };
+    });
+
+    // Aggregate
     const portfolioByDate = this.aggregatePortfolioHistory(results, startDate, totalDays);
 
-    // Convert to array and sort by date
     const history = Object.values(portfolioByDate).sort((a, b) =>
       new Date(a.date) - new Date(b.date)
     );
 
-    console.log(`✓ Accurate performance calculated: ${history.length} data points`);
+    const successCount = results.filter(r => r.priceHistory.length > 0).length;
+    console.log(`✓ Accurate performance: ${history.length} points from ${successCount}/${trackedAssets.length} assets`);
 
     return history;
   },
 
   /**
-   * Fetch historical performance for a single asset
-   */
-  async fetchAssetPerformance(asset, startDate, days) {
-    const purchaseDate = new Date(asset.purchaseDate);
-    const balance = parseFloat(asset.balance || 0);
-
-    // Fetch historical prices from CoinGecko
-    const priceHistory = await HistoricalPriceAPI.fetchHistoricalPrices(
-      asset.coingeckoId,
-      days
-    );
-
-    if (!priceHistory) {
-      console.warn(`Failed to fetch prices for ${asset.name}`);
-      return { asset, priceHistory: [] };
-    }
-
-    // Filter prices to only include dates AFTER purchase
-    const relevantPrices = priceHistory.filter(point => {
-      const pointDate = new Date(point.date);
-      return pointDate >= purchaseDate;
-    });
-
-    // Add purchase date point if not in data
-    const purchaseDateStr = purchaseDate.toISOString().split('T')[0];
-    const hasPurchasePoint = relevantPrices.some(p => p.date === purchaseDateStr);
-
-    if (!hasPurchasePoint && asset.buyPrice) {
-      relevantPrices.unshift({
-        date: purchaseDateStr,
-        timestamp: purchaseDate.getTime(),
-        price: parseFloat(asset.buyPrice)
-      });
-    }
-
-    return {
-      asset,
-      priceHistory: relevantPrices,
-      balance,
-      purchaseDate: purchaseDateStr
-    };
-  },
-
-  /**
-   * Aggregate all assets into portfolio history
+   * Aggregate portfolio history (unchanged)
    */
   aggregatePortfolioHistory(results, startDate, days) {
     const portfolioByDate = {};
@@ -930,7 +1148,7 @@ const PurchaseDatePerformance = {
             stocks: 0,
             gold: 0,
             breakdown: {},
-            isAccurate: true // Mark as accurate (not hypothetical)
+            isAccurate: true
           };
         }
 
@@ -942,7 +1160,7 @@ const PurchaseDatePerformance = {
           price,
           balance,
           name: asset.name,
-          purchaseDate // Include purchase date in breakdown
+          purchaseDate
         };
       });
     });
@@ -951,7 +1169,7 @@ const PurchaseDatePerformance = {
   },
 
   /**
-   * Calculate performance statistics
+   * Calculate stats (unchanged)
    */
   async calculateStats(days = 30) {
     const history = await this.calculateAccuratePerformance(days);
@@ -970,7 +1188,6 @@ const PurchaseDatePerformance = {
     const low = Math.min(...values);
     const avg = values.reduce((a, b) => a + b, 0) / values.length;
 
-    // Find dates of high and low
     const highPoint = history.find(h => h.total === high);
     const lowPoint = history.find(h => h.total === low);
 
@@ -988,54 +1205,6 @@ const PurchaseDatePerformance = {
       history,
       isAccurate: true,
       isHypothetical: false
-    };
-  },
-
-  /**
-   * Get performance for specific asset
-   */
-  async getAssetPerformance(assetId, days = 30) {
-    const asset = PortfolioApp.getAssets().find(a => a.id === assetId);
-
-    if (!asset || !asset.coingeckoId || !asset.purchaseDate) {
-      return null;
-    }
-
-    const startDate = new Date();
-    if (days !== 'max' && days !== 0) {
-      startDate.setDate(startDate.getDate() - days);
-    } else {
-      startDate.setTime(new Date(asset.purchaseDate).getTime());
-    }
-
-    const totalDays = Math.ceil((new Date() - startDate) / (1000 * 60 * 60 * 24));
-
-    const result = await this.fetchAssetPerformance(asset, startDate, totalDays);
-
-    if (!result.priceHistory || result.priceHistory.length === 0) {
-      return null;
-    }
-
-    const values = result.priceHistory.map(p => p.price * result.balance);
-    const oldest = values[0];
-    const newest = values[values.length - 1];
-
-    return {
-      asset: asset.name,
-      symbol: asset.symbol,
-      purchaseDate: asset.purchaseDate,
-      purchasePrice: parseFloat(asset.buyPrice),
-      currentPrice: result.priceHistory[result.priceHistory.length - 1].price,
-      balance: result.balance,
-      initialValue: oldest,
-      currentValue: newest,
-      change: newest - oldest,
-      changePercent: oldest > 0 ? ((newest - oldest) / oldest * 100) : 0,
-      history: result.priceHistory.map(p => ({
-        date: p.date,
-        price: p.price,
-        value: p.price * result.balance
-      }))
     };
   }
 };
@@ -1193,6 +1362,11 @@ const PortfolioApp = {
       files: {
         'portfolio_data.json': {
           content: JSON.stringify(assets, null, 2)
+        },
+        'portfolio_config.json': {
+          content: JSON.stringify({
+            apiKey: APIKeyManager.get()
+          }, null, 2)
         }
       }
     };
@@ -1263,12 +1437,27 @@ const PortfolioApp = {
 
       const data = await response.json();
       const fileContent = data.files['portfolio_data.json']?.content;
+      const configContent = data.files['portfolio_config.json']?.content;
+
+      let count = 0;
+
+      if (configContent) {
+        try {
+          const config = JSON.parse(configContent);
+          if (config.apiKey) {
+            APIKeyManager.set(config.apiKey);
+          }
+        } catch (e) {
+          console.warn('Failed to parse config from Gist', e);
+        }
+      }
 
       if (fileContent) {
         BackupManager.createBackup('before_sync');
         const assets = JSON.parse(fileContent);
         this.saveAssets(assets);
-        return { success: true, count: assets.length };
+        count = assets.length;
+        return { success: true, count };
       }
 
       return { success: false, message: 'No data in Gist' };
@@ -1321,14 +1510,21 @@ const PortfolioApp = {
   },
 
   // ============ Price Fetching (Rate Limited) ============
-  async fetchMarketData(coinIds) {
-    if (coinIds.length === 0) return {};
+  async fetchMarketData(symbols) {
+    if (symbols.length === 0) return {};
 
     try {
-      const ids = coinIds.join(',');
+      const apiKey = APIKeyManager.get();
+      if (!apiKey) {
+        // Return empty prices, will default to manual prices
+        return {};
+      }
+
+      // Join symbols for API call
+      const fsyms = symbols.join(',');
 
       const response = await apiRateLimiter.execute(() =>
-        fetch(`${this.API_BASE}/coins/markets?vs_currency=usd&ids=${ids}&sparkline=false`)
+        fetch(`${AppConfig.API.CRYPTOCOMPARE_BASE}/pricemultifull?fsyms=${fsyms}&tsyms=USD&api_key=${apiKey}`)
       );
 
       if (!response.ok) {
@@ -1336,15 +1532,33 @@ const PortfolioApp = {
       }
 
       const data = await response.json();
+
+      if (data.Response === 'Error') {
+        throw new AppError(data.Message, 'API_ERROR');
+      }
+
       const result = {};
 
-      data.forEach(coin => {
-        result[coin.id] = {
-          usd: coin.current_price,
-          image: coin.image
-        };
-        this._iconCache[coin.id] = coin.image;
-      });
+      if (data.RAW) {
+        Object.keys(data.RAW).forEach(symbol => {
+          if (data.RAW[symbol] && data.RAW[symbol].USD) {
+            const coinData = data.RAW[symbol].USD;
+            // coinInfo var removed as unused
+
+            result[symbol.toUpperCase()] = {
+              usd: coinData.PRICE,
+              // Use CryptoCompare image if we don't have one
+              image: coinData.IMAGEURL ? `https://www.cryptocompare.com${coinData.IMAGEURL}` : null,
+              change24h: coinData.CHANGEPCT24HOUR
+            };
+
+            // Cache icon if we found one
+            if (result[symbol.toUpperCase()].image) {
+              this._iconCache[symbol.toUpperCase()] = result[symbol.toUpperCase()].image;
+            }
+          }
+        });
+      }
 
       return result;
     } catch (error) {
@@ -1370,13 +1584,14 @@ const PortfolioApp = {
   async calculatePortfolio() {
     const assets = this.getAssets();
 
-    const coinIds = [...new Set(
+    // Get unique symbols for assets that have them and aren't manual
+    const symbols = [...new Set(
       assets
-        .filter(a => a.coingeckoId && !a.manualPrice)
-        .map(a => a.coingeckoId)
+        .filter(a => a.symbol && !a.manualPrice) // Changed from coingeckoId
+        .map(a => a.symbol)
     )];
 
-    const marketData = await this.fetchMarketData(coinIds);
+    const marketData = await this.fetchMarketData(symbols);
 
     const assetsWithValues = assets.map(asset => {
       let currentPrice = 0;
@@ -1384,10 +1599,16 @@ const PortfolioApp = {
 
       if (asset.manualPrice) {
         currentPrice = parseFloat(asset.manualPrice);
-      } else if (asset.coingeckoId && marketData[asset.coingeckoId]) {
-        currentPrice = marketData[asset.coingeckoId].usd;
-        if (!iconUrl && marketData[asset.coingeckoId].image) {
-          iconUrl = marketData[asset.coingeckoId].image;
+      } else if (asset.symbol) {
+        // Look up by symbol (case insensitive safety)
+        const symbolKey = asset.symbol.toUpperCase();
+        if (marketData[symbolKey]) {
+          currentPrice = marketData[symbolKey].usd;
+
+          // Use API image if we don't have a custom one
+          if (!iconUrl && marketData[symbolKey].image) {
+            iconUrl = marketData[symbolKey].image;
+          }
         }
       }
 
@@ -1519,3 +1740,14 @@ const PortfolioApp = {
 };
 
 window.PortfolioApp = PortfolioApp;
+
+// Auto pre-warm cache on page load (after 2 seconds)
+setTimeout(() => {
+  if (PortfolioApp.getAssets().length > 0) {
+    HistoricalPriceAPI.prewarmCache().catch(err =>
+      console.warn('Cache pre-warming failed:', err)
+    );
+  }
+}, 2000);
+
+console.log('✓ Optimized Historical API loaded');

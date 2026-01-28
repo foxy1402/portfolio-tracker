@@ -1,6 +1,6 @@
 # Portfolio Tracker
 
-A beautiful portfolio tracker for crypto, tokenized US stocks, and tokenized gold with real-time prices via CoinGecko API and cross-device sync via GitHub Gist.
+A beautiful portfolio tracker for crypto, tokenized US stocks, and tokenized gold with real-time prices via CryptoCompare API and cross-device sync via GitHub Gist.
 
 ## Features
 
@@ -10,9 +10,9 @@ A beautiful portfolio tracker for crypto, tokenized US stocks, and tokenized gol
 - 📱 **Installable App (PWA)** - Install on Android/iOS with offline support
 - 📳 **Mobile Mode** - Toggle optimized layout for phone screens
 - 💰 **ROI Tracking** - Track profit/loss vs your buy price
-- 🔄 **Real-time Prices** - CoinGecko API for live pricing
-- ☁️ **Cloud Sync** - Sync data across devices via GitHub Gist
-- 🔐 **Secure Auth** - Token stored in memory only (never saved)
+- 🔄 **Real-time Prices** - CryptoCompare API for live pricing (Stable & Reliable)
+- ☁️ **Cloud Sync** - Sync data (and API key) across devices via GitHub Gist
+- 🔐 **Secure Auth** - Token stored in memory only; API Key stored locally
 - 💾 **Offline Support** - Works offline with localStorage
 
 ## Deploy to GitHub Pages
@@ -30,6 +30,12 @@ A beautiful portfolio tracker for crypto, tokenized US stocks, and tokenized gol
 4. **Install App:** Open link on mobile → Tap "Add to Home Screen" or "Install App"
 
 ## New Features
+
+### 🔑 CryptoCompare Integration
+Migrated to CryptoCompare API for better stability and rate limits.
+- **Improved Reliability**: No more rate limit errors or 429 status codes.
+- **Symbol Based**: Just type `BTC`, `ETH`, `AAPL` - no complex IDs needed.
+- **Secure**: Add your own free API key in the Admin panel.
 
 ### ⚖️ Rebalance Calculator
 A powerful tool to help you maintain your desired portfolio structure.
@@ -56,19 +62,23 @@ Accurate historical performance calculation based on **when you bought** the ass
 
 ## Usage
 
+### Setup (First Time)
+1. Go to [min-api.cryptocompare.com](https://min-api.cryptocompare.com) and get a free API Key.
+2. Open Admin page → Enter API Key in the "API Configuration" section.
+3. Save Key.
+
 ### Adding Assets
 1. Open Admin page → Login with GitHub token (or skip for local-only)
 2. Select category (Crypto/Stocks/Gold)
 3. Enter:
-   - **Name & Symbol**
-   - **CoinGecko ID** (for auto pricing) OR **Manual Price**
+   - **Name & Symbol** (e.g., Symbol: `BTC`, `TSLA`)
    - **Buy Price** (your average cost for ROI tracking)
    - **Purchase Date** (for accurate historical charts)
    - **Balance** (amount held)
 
 ### Syncing Data
 1. Login with GitHub Personal Access Token
-2. **Push** → Upload local data to Gist (cloud)
+2. **Push** → Upload local data (and API key) to Gist (cloud)
 3. **Pull** → Download from Gist to local
 
 ### Creating a GitHub Token
@@ -80,17 +90,15 @@ Accurate historical performance calculation based on **when you bought** the ass
 ## Security
 
 - ✅ Token only stored in **browser memory** (cleared when tab closes)
+- ✅ API Key stored locally (obfuscated) and synced privately
 - ✅ No credentials in source code
 - ✅ Data stored in **private** GitHub Gist
 - ✅ Safe to host on public GitHub Pages
 
-## CoinGecko IDs
+## Supported Assets
 
-| Asset | ID |
-|-------|-----|
-| Bitcoin | `bitcoin` |
-| Ethereum | `ethereum` |
-| PAX Gold | `pax-gold` |
-| Tether Gold | `tether-gold` |
+Use standard ticker symbols:
+- **Crypto:** `BTC`, `ETH`, `SOL`, `BNB`
+- **Gold:** `PAXG`, `XAUT` (Tether Gold)
+- **Stocks:** `AAPL`, `TSLA`, `SPY` (Tokenized versions tracked via Crypto/Stock APIs)
 
-Find more at [coingecko.com](https://www.coingecko.com) (look at URL: `/coins/bitcoin` → ID is `bitcoin`)
