@@ -1578,6 +1578,12 @@
         const touch = e.touches[0];
         handleChartHover({ clientX: touch.clientX, clientY: touch.clientY }, canvas, points);
       };
+
+      canvas.ontouchend = () => {
+        if (typeof resetHeroStats === 'function') {
+          resetHeroStats();
+        }
+      };
     }
 
     // Offline Detection
