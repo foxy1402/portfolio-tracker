@@ -5,12 +5,14 @@
 // ============ Configuration ============
 const AppConfig = {
   API: {
-    COINMARKETCAP_BASE: 'https://pro-api.coinmarketcap.com/v1',
-    COINMARKETCAP_SANDBOX: 'https://sandbox-api.coinmarketcap.com/v1', // For testing
+    // NEW - Add CoinStats
+    COINSTATS_BASE: 'https://openapiv1.coinstats.app',
+    COINSTATS_API_KEY: null, // Optional, for authenticated requests
+
     GITHUB_BASE: 'https://api.github.com/gists',
     EXCHANGE_RATE: 'https://api.exchangerate-api.com/v4/latest/USD',
     RATE_LIMIT: {
-      MAX_REQUESTS: 10,
+      MAX_REQUESTS: 20, // CoinStats has better limits
       PER_MINUTE: 60000
     }
   },
@@ -21,7 +23,7 @@ const AppConfig = {
   STORAGE: {
     ASSETS_KEY: 'portfolio_assets',
     GIST_ID_KEY: 'portfolio_gist_id',
-    API_KEY: 'portfolio_cmc_api_key', // ✨ NEW
+    API_KEY: 'portfolio_coinstats_api_key', // Changed from CMC
     BACKUPS_KEY: 'portfolio_backups',
     MAX_BACKUPS: 10
   },
@@ -35,11 +37,11 @@ const AppConfig = {
 };
 
 // ============ API Key Manager (Synced via Gist) ============
-// ============ CoinMarketCap API Key Manager ============
-const CMCAPIKeyManager = {
+// ============ CoinStats API Key Manager ============
+const CoinStatsAPIKeyManager = {
   STORAGE_KEY: AppConfig.STORAGE.API_KEY,
 
-  // Get API key
+  // Get API key (optional for CoinStats)
   get() {
     try {
       const encrypted = localStorage.getItem(this.STORAGE_KEY);
@@ -56,7 +58,6 @@ const CMCAPIKeyManager = {
       localStorage.removeItem(this.STORAGE_KEY);
       return;
     }
-
     const encrypted = btoa(apiKey);
     localStorage.setItem(this.STORAGE_KEY, encrypted);
   },
@@ -71,17 +72,21 @@ const CMCAPIKeyManager = {
     localStorage.removeItem(this.STORAGE_KEY);
   },
 
-  // Validate API key
+  // Validate API key (test with BTC price)
   async validate(apiKey) {
     try {
+      const headers = {
+        'Accept': 'application/json'
+      };
+
+      // Add API key if provided
+      if (apiKey) {
+        headers['X-API-KEY'] = apiKey;
+      }
+
       const response = await fetch(
-        `${AppConfig.API.COINMARKETCAP_BASE}/cryptocurrency/quotes/latest?symbol=BTC`,
-        {
-          headers: {
-            'X-CMC_PRO_API_KEY': apiKey,
-            'Accept': 'application/json'
-          }
-        }
+        `${AppConfig.API.COINSTATS_BASE}/coins?currency=USD&limit=1`,
+        { headers }
       );
 
       if (!response.ok) {
@@ -90,14 +95,10 @@ const CMCAPIKeyManager = {
 
       const data = await response.json();
 
-      if (data.status && data.status.error_code !== 0) {
-        return { valid: false, error: data.status.error_message };
-      }
-
-      if (data.data && data.data.BTC) {
+      if (data.result && data.result.length > 0) {
         return {
           valid: true,
-          testPrice: data.data.BTC.quote.USD.price
+          testPrice: data.result[0].price
         };
       }
 
@@ -108,7 +109,8 @@ const CMCAPIKeyManager = {
   }
 };
 
-window.APIKeyManager = APIKeyManager;
+// Export globally
+window.CoinStatsAPIKeyManager = CoinStatsAPIKeyManager;
 
 // ============ Utility Functions ============
 const Utils = {
@@ -690,17 +692,14 @@ const HistoryTracker = {
 // ============ OPTIMIZED Historical Price API with Aggressive Caching ============
 // This fixes rate limiting issues and prevents false stats
 
-// ============ CoinMarketCap Historical Price API ============
+// ============ CoinStats Historical Price API ============
 const HistoricalPriceAPI = {
-  CACHE_KEY: 'portfolio_historical_cache_v4', // CMC version
-  CACHE_DURATION: 24 * 60 * 60 * 1000, // 24 hours
+  CACHE_KEY: 'portfolio_historical_cache_v5', // New version
+  CACHE_DURATION: 24 * 60 * 60 * 1000,
 
   lastCallTime: 0,
-  MIN_CALL_INTERVAL: 1000, // 1 second between calls (CMC is stricter)
+  MIN_CALL_INTERVAL: 500, // CoinStats is more lenient
 
-  /**
-   * Get cached data
-   */
   getCache() {
     try {
       const data = localStorage.getItem(this.CACHE_KEY);
@@ -723,9 +722,6 @@ const HistoricalPriceAPI = {
     }
   },
 
-  /**
-   * Set cache
-   */
   setCache(key, data) {
     try {
       const cache = this.getCache();
@@ -741,84 +737,29 @@ const HistoricalPriceAPI = {
   },
 
   /**
-   * Get API key
+   * Fetch historical prices from CoinStats
+   * @param {string} coinId - CoinStats coin ID (e.g., "bitcoin")
+   * @param {number|string} days - Number of days (1, 7, 30, 90, 180, 365, "max")
    */
-  getApiKey() {
-    const apiKey = CMCAPIKeyManager.get();
-    if (!apiKey) {
-      throw new Error('CoinMarketCap API key not configured');
-    }
-    return apiKey;
-  },
-
-  /**
-   * Get cryptocurrency ID from symbol or UCID
-   */
-  async getCryptoId(symbolOrUCID) {
-    const apiKey = this.getApiKey();
-
-    // If it's a UCID (numeric), use directly
-    if (!isNaN(symbolOrUCID)) {
-      return parseInt(symbolOrUCID);
-    }
-
-    // Otherwise, map symbol to ID
-    const cacheKey = `symbol_to_id_${symbolOrUCID}`;
+  async fetchHistoricalPrices(coinId, days) {
+    const cacheKey = `${coinId}_${days}`;
     const cache = this.getCache();
 
     if (cache[cacheKey]) {
+      console.log(`✓ Cache hit: ${coinId} (${days} days)`);
       return cache[cacheKey].data;
     }
 
-    try {
-      const response = await fetch(
-        `${AppConfig.API.COINMARKETCAP_BASE}/cryptocurrency/map?symbol=${symbolOrUCID}`,
-        {
-          headers: {
-            'X-CMC_PRO_API_KEY': apiKey,
-            'Accept': 'application/json'
-          }
-        }
-      );
-
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-      const data = await response.json();
-
-      if (data.data && data.data.length > 0) {
-        const id = data.data[0].id;
-        this.setCache(cacheKey, id);
-        return id;
-      }
-
-      throw new Error('Symbol not found');
-    } catch (error) {
-      console.error(`Failed to get ID for ${symbolOrUCID}:`, error);
-      return null;
-    }
-  },
-
-  /**
-   * Fetch historical prices from CoinMarketCap
-   */
-  async fetchHistoricalPrices(symbolOrUCID, days) {
-    const cacheKey = `${symbolOrUCID}_${days}`;
-    const cache = this.getCache();
-
-    // Return cached data if available
-    if (cache[cacheKey]) {
-      console.log(`✓ Cache hit: ${symbolOrUCID} (${days} days)`);
-      return cache[cacheKey].data;
-    }
-
-    console.log(`⚠ Cache miss: ${symbolOrUCID} (${days} days) - fetching...`);
+    console.log(`⚠ Cache miss: ${coinId} (${days} days) - fetching...`);
 
     try {
-      const apiKey = this.getApiKey();
-      const cryptoId = await this.getCryptoId(symbolOrUCID);
+      const apiKey = CoinStatsAPIKeyManager.get();
+      const headers = {
+        'Accept': 'application/json'
+      };
 
-      if (!cryptoId) {
-        throw new Error('Could not resolve crypto ID');
+      if (apiKey) {
+        headers['X-API-KEY'] = apiKey;
       }
 
       // Rate limiting
@@ -831,21 +772,19 @@ const HistoricalPriceAPI = {
 
       this.lastCallTime = Date.now();
 
-      // Calculate time range
-      const endTime = new Date();
-      const startTime = new Date();
-      startTime.setDate(startTime.getDate() - days);
+      // Map days to period
+      const period = days === 'max' || days === 0 ? 'all' :
+        days <= 1 ? '24h' :
+          days <= 7 ? '1w' :
+            days <= 30 ? '1m' :
+              days <= 90 ? '3m' :
+                days <= 180 ? '6m' :
+                  days <= 365 ? '1y' : 'all';
 
-      // CMC uses different endpoint for historical data
-      // Note: Historical OHLCV requires paid plan, so we'll use quotes/historical
+      // CoinStats charts endpoint
       const response = await fetch(
-        `${AppConfig.API.COINMARKETCAP_BASE}/cryptocurrency/quotes/historical?id=${cryptoId}&time_start=${Math.floor(startTime.getTime() / 1000)}&time_end=${Math.floor(endTime.getTime() / 1000)}&interval=hourly`,
-        {
-          headers: {
-            'X-CMC_PRO_API_KEY': apiKey,
-            'Accept': 'application/json'
-          }
-        }
+        `${AppConfig.API.COINSTATS_BASE}/coins/${coinId}/charts?period=${period}`,
+        { headers }
       );
 
       if (!response.ok) {
@@ -857,16 +796,11 @@ const HistoricalPriceAPI = {
 
       const data = await response.json();
 
-      if (data.status && data.status.error_code !== 0) {
-        throw new Error(data.status.error_message);
-      }
-
       // Transform to our format
-      const quotes = data.data.quotes || [];
-      const transformed = quotes.map(quote => ({
-        date: new Date(quote.timestamp).toISOString().split('T')[0],
-        timestamp: new Date(quote.timestamp).getTime(),
-        price: quote.quote.USD.price
+      const transformed = data.map(point => ({
+        date: new Date(point[0]).toISOString().split('T')[0],
+        timestamp: point[0],
+        price: point[1]
       }));
 
       // Cache the result
@@ -874,12 +808,11 @@ const HistoricalPriceAPI = {
 
       return transformed;
     } catch (error) {
-      console.error(`Failed to fetch ${symbolOrUCID}:`, error);
+      console.error(`Failed to fetch ${coinId}:`, error);
 
-      // Fallback: Use current price for estimation
+      // Fallback: Use current price
       try {
-        console.warn(`Using current price fallback for ${symbolOrUCID}`);
-        return await this.createFallbackHistory(symbolOrUCID, days);
+        return await this.createFallbackHistory(coinId, days);
       } catch {
         return [];
       }
@@ -888,38 +821,35 @@ const HistoricalPriceAPI = {
 
   /**
    * Create fallback history using current price
-   * (When historical API fails or requires paid plan)
    */
-  async createFallbackHistory(symbolOrUCID, days) {
-    const apiKey = this.getApiKey();
-    const cryptoId = await this.getCryptoId(symbolOrUCID);
+  async createFallbackHistory(coinId, days) {
+    const apiKey = CoinStatsAPIKeyManager.get();
+    const headers = { 'Accept': 'application/json' };
 
-    if (!cryptoId) return [];
+    if (apiKey) {
+      headers['X-API-KEY'] = apiKey;
+    }
 
     const response = await fetch(
-      `${AppConfig.API.COINMARKETCAP_BASE}/cryptocurrency/quotes/latest?id=${cryptoId}`,
-      {
-        headers: {
-          'X-CMC_PRO_API_KEY': apiKey,
-          'Accept': 'application/json'
-        }
-      }
+      `${AppConfig.API.COINSTATS_BASE}/coins/${coinId}`,
+      { headers }
     );
 
     if (!response.ok) return [];
 
     const data = await response.json();
-    const currentPrice = data.data[cryptoId]?.quote?.USD?.price;
+    const currentPrice = data.price;
 
     if (!currentPrice) return [];
 
-    // Generate synthetic history with slight variations
+    // Generate synthetic history
     const history = [];
     const now = Date.now();
+    const numDays = days === 'max' || days === 0 ? 365 : days;
 
-    for (let i = days; i >= 0; i--) {
+    for (let i = numDays; i >= 0; i--) {
       const timestamp = now - (i * 24 * 60 * 60 * 1000);
-      const variance = (Math.random() - 0.5) * 0.02; // ±1% daily variance
+      const variance = (Math.random() - 0.5) * 0.02;
       const price = currentPrice * (1 + variance);
 
       history.push({
@@ -942,7 +872,7 @@ const HistoricalPriceAPI = {
 
     // Separate cached vs uncached
     assets.forEach(asset => {
-      const identifier = asset.coinmarketcapUCID || asset.symbol;
+      const identifier = asset.coinstatsId || asset.symbol.toLowerCase();
       const cacheKey = `${identifier}_${days}`;
 
       if (cache[cacheKey]) {
@@ -958,10 +888,10 @@ const HistoricalPriceAPI = {
 
     console.log(`📊 Cache: ${Object.keys(results).length} hits, ${toFetch.length} misses`);
 
-    // Fetch missing data with delays
+    // Fetch missing data
     for (let i = 0; i < toFetch.length; i++) {
       const asset = toFetch[i];
-      const identifier = asset.coinmarketcapUCID || asset.symbol;
+      const identifier = asset.coinstatsId || asset.symbol.toLowerCase();
 
       try {
         const priceHistory = await this.fetchHistoricalPrices(identifier, days);
@@ -972,9 +902,9 @@ const HistoricalPriceAPI = {
           fromCache: false
         };
 
-        // Add delay between requests
+        // Delay between requests
         if (i < toFetch.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1200)); // 1.2s delay
+          await new Promise(resolve => setTimeout(resolve, 600));
         }
       } catch (error) {
         console.error(`Failed to fetch ${asset.name}:`, error);
@@ -990,31 +920,20 @@ const HistoricalPriceAPI = {
   },
 
   /**
-   * Pre-warm cache for all assets
-   */
-  async prewarmCache() {
-    const assets = PortfolioApp.getAssets();
-    console.log('🔥 Pre-warming cache for', assets.length, 'assets');
-    await this.batchFetchHistoricalPrices(assets, 30);
-  },
-
-  /**
    * Calculate portfolio history
    */
   async calculatePortfolioHistory(days = 30) {
     const assets = PortfolioApp.getAssets();
-
-    const trackedAssets = assets.filter(a => a.coinmarketcapUCID || a.symbol);
+    const trackedAssets = assets.filter(a => a.symbol);
 
     if (trackedAssets.length === 0) {
-      console.warn('No assets with CMC UCID or symbols found');
+      console.warn('No assets with symbols found');
       return null;
     }
 
     console.log(`📈 Calculating history for ${trackedAssets.length} assets (${days} days)`);
 
     const results = await this.batchFetchHistoricalPrices(trackedAssets, days);
-
     const portfolioByDate = {};
 
     Object.values(results).forEach(({ asset, priceHistory }) => {
@@ -1035,7 +954,7 @@ const HistoricalPriceAPI = {
             stocks: 0,
             gold: 0,
             breakdown: {},
-            isAccurate: false // This history is API-based, not purchase-date accurate
+            isAccurate: false
           };
         }
 
@@ -1056,39 +975,39 @@ const HistoricalPriceAPI = {
     );
 
     const successCount = Object.values(results).filter(r => r.priceHistory?.length > 0).length;
-    console.log(`✓ History calculated: ${history.length} points from ${successCount}/${trackedAssets.length} assets`);
+    console.log(`✓ History: ${history.length} points from ${successCount}/${trackedAssets.length} assets`);
 
     return history;
   },
 
   /**
-   * Calculate performance
+   * Calculate performance stats
    */
   async calculatePerformance(days = 30) {
-    // Priority 1: Accurate performance (purchase dates)
+    // Try purchase date performance first
     try {
       const accuratePerf = await PurchaseDatePerformance.calculateStats(days);
-
       if (accuratePerf && accuratePerf.dataPoints >= 2) {
-        console.log('✓ Using accurate performance (purchase dates)');
         return accuratePerf;
       }
     } catch (error) {
       console.warn('Purchase date performance failed:', error);
     }
 
-    // Priority 2: Local snapshots
-    const localHistory = HistoryTracker.getRange(days === 'max' || days === 0 ? 0 : days);
+    // Fallback to local history
+    const localHistory = HistoryTracker.getRange(
+      days === 'max' || days === 0 ? 0 : days
+    );
 
     if (localHistory.length >= 2) {
-      console.log('✓ Using local snapshot history');
       const values = localHistory.map(h => h.total);
-
       return {
         oldest: localHistory[0].total,
         newest: localHistory[localHistory.length - 1].total,
         change: localHistory[localHistory.length - 1].total - localHistory[0].total,
-        changePercent: localHistory[0].total > 0 ? ((localHistory[localHistory.length - 1].total - localHistory[0].total) / localHistory[0].total * 100) : 0,
+        changePercent: localHistory[0].total > 0
+          ? ((localHistory[localHistory.length - 1].total - localHistory[0].total) / localHistory[0].total * 100)
+          : 0,
         high: Math.max(...values),
         low: Math.min(...values),
         avg: values.reduce((a, b) => a + b, 0) / values.length,
@@ -1099,12 +1018,10 @@ const HistoricalPriceAPI = {
       };
     }
 
-    // Priority 3: API-based calculation
-    console.warn('⚠ Using API-based calculation');
+    // API-based calculation
     const history = await this.calculatePortfolioHistory(days);
 
     if (!history || history.length < 2) {
-      console.error('❌ Insufficient data for performance calculation');
       return null;
     }
 
@@ -1127,16 +1044,10 @@ const HistoricalPriceAPI = {
     };
   },
 
-  /**
-   * Clear cache
-   */
   clearCache() {
     localStorage.removeItem(this.CACHE_KEY);
   },
 
-  /**
-   * Get cache statistics
-   */
   getCacheStats() {
     const cache = this.getCache();
     const entries = Object.keys(cache).length;
@@ -1149,18 +1060,13 @@ const HistoricalPriceAPI = {
     };
   },
 
-  /**
-    * Pre-warm cache for all assets (call this on app load)
-    */
   async prewarmCache() {
     const assets = PortfolioApp.getAssets();
     const trackedAssets = assets.filter(a => a.symbol);
 
     if (trackedAssets.length === 0) return;
 
-    console.log('🔥 Pre-warming cache for future requests...');
-
-    // Fetch 7-day and 30-day data for all assets
+    console.log('🔥 Pre-warming cache...');
     const periods = [7, 30];
 
     for (const days of periods) {
@@ -1490,7 +1396,7 @@ const PortfolioApp = {
 
     const assets = this.getAssets();
     const gistId = this.getGistId();
-    const apiKey = CMCAPIKeyManager.get();
+    const apiKey = CoinStatsAPIKeyManager.get(); // Changed
 
     const payload = {
       description: 'Portfolio Tracker Data - DO NOT EDIT MANUALLY',
@@ -1502,8 +1408,8 @@ const PortfolioApp = {
         'portfolio_config.json': {
           content: JSON.stringify({
             apiKey: apiKey || null,
-            provider: 'coinmarketcap',
-            version: '2.0',
+            provider: 'coinstats', // Changed
+            version: '3.0',
             lastSync: new Date().toISOString()
           }, null, 2)
         }
@@ -1588,7 +1494,7 @@ const PortfolioApp = {
           try {
             const config = JSON.parse(configContent);
             if (config.apiKey) {
-              CMCAPIKeyManager.set(config.apiKey);
+              CoinStatsAPIKeyManager.set(config.apiKey); // Changed
               console.log('✓ API key synced from Gist');
             }
           } catch (e) {
@@ -1648,95 +1554,78 @@ const PortfolioApp = {
     }
   },
 
-  // ============ Price Fetching (CoinMarketCap) ============
-  async fetchMarketData(identifiers) {
-    if (identifiers.length === 0) return {};
+  // ============ CoinStats Price Fetching ============
+  async fetchMarketData(assets) {
+    if (!assets || assets.length === 0) return {};
 
     try {
-      const apiKey = CMCAPIKeyManager.get();
-      if (!apiKey) {
-        // Defaults to manual prices if no key
-        return {};
+      const apiKey = CoinStatsAPIKeyManager.get();
+      const headers = {
+        'Accept': 'application/json'
+      };
+
+      // Optional: Add API key for higher rate limits
+      if (apiKey) {
+        headers['X-API-KEY'] = apiKey;
       }
 
-      // Separate UCIDs and symbols
-      const ucids = identifiers.filter(id => !isNaN(id));
-      const symbols = identifiers.filter(id => isNaN(id));
+      // Collect IDs
+      const ids = [...new Set(assets.filter(a => a.coinstatsId).map(a => a.coinstatsId))];
 
+      let url;
+      if (ids.length > 0) {
+        // Fetch specific IDs
+        url = `${AppConfig.API.COINSTATS_BASE}/coins?currency=USD&coinIds=${ids.join(',')}`;
+      } else {
+        // Fallback: Fetch Top 100
+        url = `${AppConfig.API.COINSTATS_BASE}/coins?currency=USD&limit=100`;
+      }
+
+      const response = await apiRateLimiter.execute(() => fetch(url, { headers }));
+
+      if (!response.ok) {
+        throw new Error(`CoinStats API error: ${response.status}`);
+      }
+
+      const data = await response.json();
       const result = {};
 
-      // Fetch by UCID if available
-      if (ucids.length > 0) {
-        const idsParam = ucids.join(',');
+      // Build lookup map
+      if (data.result && Array.isArray(data.result)) {
+        data.result.forEach(coin => {
+          const priceData = {
+            usd: coin.price,
+            image: coin.icon,
+            id: coin.id,
+            rank: coin.rank,
+            change1h: coin.priceChange1h,
+            change1d: coin.priceChange1d,
+            change1w: coin.priceChange1w,
+            volume: coin.volume,
+            marketCap: coin.marketCap
+          };
 
-        const response = await apiRateLimiter.execute(() =>
-          fetch(`${AppConfig.API.COINMARKETCAP_BASE}/cryptocurrency/quotes/latest?id=${idsParam}`, {
-            headers: {
-              'X-CMC_PRO_API_KEY': apiKey,
-              'Accept': 'application/json'
-            }
-          })
-        );
+          // Map by Symbol (uppercase)
+          result[coin.symbol.toUpperCase()] = priceData;
 
-        if (response.ok) {
-          const data = await response.json();
+          // Map by ID (for exact lookups)
+          result[coin.id] = priceData;
 
-          Object.values(data.data || {}).forEach(crypto => {
-            result[crypto.id] = {
-              usd: crypto.quote.USD.price,
-              image: `https://s2.coinmarketcap.com/static/img/coins/64x64/${crypto.id}.png`
-            };
-            this._iconCache[crypto.id] = result[crypto.id].image;
-          });
-        }
-      }
-
-      // Fetch by symbol
-      if (symbols.length > 0) {
-        const symbolsParam = symbols.join(',');
-
-        const response = await apiRateLimiter.execute(() =>
-          fetch(`${AppConfig.API.COINMARKETCAP_BASE}/cryptocurrency/quotes/latest?symbol=${symbolsParam}`, {
-            headers: {
-              'X-CMC_PRO_API_KEY': apiKey,
-              'Accept': 'application/json'
-            }
-          })
-        );
-
-        if (response.ok) {
-          const data = await response.json();
-
-          Object.entries(data.data || {}).forEach(([symbol, crypto]) => {
-            // Note: CMC might return array if multiple coins allow same symbol, assume first for now or exact match check
-            // For standard symbols, data.data[symbol] is usually a single object or array
-            // CMC API v1 quoted by symbol returns Map<String, Array<Cryptocurrency>>
-            // Actually, for latest quotes efficiently, it returns keys as symbols.
-            // If multiple coins share a symbol, it returns an array. We'll take the first one (usually highest rank)
-
-            const coinData = Array.isArray(crypto) ? crypto[0] : crypto;
-
-            result[symbol.toUpperCase()] = {
-              usd: coinData.quote.USD.price,
-              image: `https://s2.coinmarketcap.com/static/img/coins/64x64/${coinData.id}.png`
-            };
-            this._iconCache[symbol.toUpperCase()] = result[symbol.toUpperCase()].image;
-          });
-        }
+          // Cache icon
+          this._iconCache[coin.symbol.toUpperCase()] = coin.icon;
+        });
       }
 
       return result;
     } catch (error) {
       console.error('Market data fetch error:', error);
-      if (error.message === 'API key not configured') {
-        ToastManager.error('Please configure CoinMarketCap API key');
-      }
+      ToastManager.error('Failed to fetch prices. Using cached data.');
       return {};
     }
   },
 
-  getCachedIcon(coingeckoId) {
-    return this._iconCache[coingeckoId] || null;
+  getCachedIcon(symbol) {
+    return this._iconCache[symbol?.toUpperCase()] || null;
   },
 
   getAssetsByCategory() {
@@ -1751,15 +1640,7 @@ const PortfolioApp = {
   // ============ Portfolio Calculation ============
   async calculatePortfolio() {
     const assets = this.getAssets();
-
-    // Get unique identifiers (UCIDs or Symbols)
-    const identifiers = [...new Set(
-      assets
-        .filter(a => (a.coinmarketcapUCID || a.symbol) && !a.manualPrice)
-        .map(a => a.coinmarketcapUCID || a.symbol.toUpperCase())
-    )];
-
-    const marketData = await this.fetchMarketData(identifiers);
+    const marketData = await this.fetchMarketData(assets);
 
     const assetsWithValues = assets.map(asset => {
       let currentPrice = 0;
@@ -1768,25 +1649,27 @@ const PortfolioApp = {
       if (asset.manualPrice) {
         currentPrice = parseFloat(asset.manualPrice);
       } else {
-        // Try simple symbol lookup or UCID lookup
-        // Identifier in marketData could be UCID (number as string) or symbol (string)
+        // Determine which key to use for lookup
+        let priceData = null;
 
-        // Priority 1: UCID
-        if (asset.coinmarketcapUCID && marketData[asset.coinmarketcapUCID]) {
-          currentPrice = marketData[asset.coinmarketcapUCID].usd;
-          if (!iconUrl && marketData[asset.coinmarketcapUCID].image) {
-            iconUrl = marketData[asset.coinmarketcapUCID].image;
-          }
+        // Priority 1: CoinStats ID (Best)
+        if (asset.coinstatsId && marketData[asset.coinstatsId]) {
+          priceData = marketData[asset.coinstatsId];
         }
-        // Priority 2: Symbol
-        else if (asset.symbol) {
-          const key = asset.symbol.toUpperCase();
-          if (marketData[key]) {
-            currentPrice = marketData[key].usd;
-            if (!iconUrl && marketData[key].image) {
-              iconUrl = marketData[key].image;
-            }
+        // Priority 2: Symbol (Fallback)
+        else if (asset.symbol && marketData[asset.symbol.toUpperCase()]) {
+          priceData = marketData[asset.symbol.toUpperCase()];
+        }
+
+        if (priceData) {
+          currentPrice = priceData.usd;
+          if (!iconUrl && priceData.image) {
+            iconUrl = priceData.image;
           }
+        } else if (!asset.manualPrice) {
+          // Only warn if we expected a price
+          const id = asset.coinstatsId || asset.symbol;
+          console.warn(`⚠️ No price data found for ${asset.name} (${id})`);
         }
       }
 
