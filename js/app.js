@@ -1272,31 +1272,39 @@ const PurchaseDatePerformance = {
    */
   aggregatePortfolioHistory(results, startDate, days) {
     const portfolioByDate = {};
-    const isShortTerm = days <= 1; // 24H view need sub-daily resolution
+
+    // Determine bucketing strategy
+    const useHourlyBuckets = days <= 1;  // 24H view
+    const use6HourBuckets = days > 1 && days <= 7;  // 1W view
+    const useDailyBuckets = days > 7;  // 1M+ views
 
     results.forEach(({ asset, priceHistory, balance, purchaseDate }) => {
       if (!priceHistory || priceHistory.length === 0) return;
 
       priceHistory.forEach(({ date, timestamp, price }) => {
-        // For short term, use specific timestamp key to preserve hourly points
-        // For long term, stick to date string to aggregate daily
-        const shouldUseTimestamp = days <= 7;
-        let effectiveKey;
+        // Calculate bucket timestamp
+        let bucketTimestamp;
 
-        if (shouldUseTimestamp) {
-          // Normalize to hourly buckets (or whatever resolution)
-          // Since we snapped in downsampleHistory, timestamp is already snapped.
-          // But to be safe against mixed data sources:
-          const hourBucket = Math.floor(timestamp / (3600 * 1000)) * 3600 * 1000;
-          effectiveKey = new Date(hourBucket).toISOString();
+        if (useHourlyBuckets) {
+          // 1-hour buckets for 24H
+          bucketTimestamp = Math.floor(timestamp / (3600 * 1000)) * 3600 * 1000;
+        } else if (use6HourBuckets) {
+          // 6-hour buckets for 1W
+          bucketTimestamp = Math.floor(timestamp / (6 * 3600 * 1000)) * (6 * 3600 * 1000);
         } else {
-          effectiveKey = date;
+          // Daily buckets for 1M+
+          const d = new Date(timestamp);
+          d.setHours(0, 0, 0, 0);
+          bucketTimestamp = d.getTime();
         }
+
+        // ✅ ALWAYS use timestamp as key (consistent format)
+        const effectiveKey = bucketTimestamp.toString();
 
         if (!portfolioByDate[effectiveKey]) {
           portfolioByDate[effectiveKey] = {
-            date: date,
-            timestamp: timestamp,
+            date: new Date(bucketTimestamp).toISOString().split('T')[0],
+            timestamp: bucketTimestamp,
             total: 0,
             crypto: 0,
             stocks: 0,
@@ -1306,18 +1314,18 @@ const PurchaseDatePerformance = {
           };
         }
 
-        // Zero-fill if before purchase date (for short-term context)
+        // Zero-fill if before purchase date
         const isPrePurchase = date < purchaseDate;
         const value = isPrePurchase ? 0 : (price * balance);
 
-        // Handle Overwrite for same asset
+        // Handle overwrites for same asset (avoid double counting)
         const existingAssetData = portfolioByDate[effectiveKey].breakdown[asset.id];
         if (existingAssetData) {
-          // Subtract old value to avoid double counting
           portfolioByDate[effectiveKey].total -= existingAssetData.value;
           portfolioByDate[effectiveKey][asset.category] -= existingAssetData.value;
         }
 
+        // Add/update asset data
         portfolioByDate[effectiveKey].total += value;
         portfolioByDate[effectiveKey][asset.category] += value;
         portfolioByDate[effectiveKey].breakdown[asset.id] = {

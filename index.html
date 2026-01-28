@@ -724,6 +724,9 @@
           document.getElementById('assetsSection').style.display = '';
         }
 
+        // ✅ Clean up ALL chart states before redrawing
+        cleanupAllCharts();
+
         // Redraw charts after layout change
         setTimeout(() => {
           if (typeof chartData !== 'undefined' && chartData.length > 0) {
@@ -746,6 +749,62 @@
         applyMobileMode(this.checked);
         localStorage.setItem('portfolioMobileMode', this.checked);
       });
+    }
+
+    // ✅ NEW: Cleanup function for all charts
+    function cleanupAllCharts() {
+      // Clean up history chart
+      const historyCanvas = document.getElementById('historyChart');
+      if (historyCanvas && historyCanvas._chartCleanup) {
+        historyCanvas._chartCleanup();
+      }
+
+      // Clean up hero mini chart
+      const heroCanvas = document.getElementById('heroMiniChart');
+      if (heroCanvas && heroCanvas._chartCleanup) {
+        heroCanvas._chartCleanup();
+      }
+
+      // Hide all tooltips
+      const tooltip = document.getElementById('chartTooltipFloating');
+      if (tooltip) {
+        tooltip.classList.remove('visible');
+      }
+
+      // Reset hero stats to default
+      resetHeroStats();
+      if (typeof resetDesktopStats === 'function') {
+        // Define resetDesktopStats if needed or ensure it exists, 
+        // guidev3 calls it but it might not be defined in file. 
+        // Checking existing code, updateDesktopStats exists but resetDesktopStats might not.
+        // Wait, guidev3 code uses resetDesktopStats() in cleanupAllCharts.
+        // I should check if I need to implement it.
+        // For now let's safely call it if it exists or implement a simple one.
+        // To be safe and follow guide, I will just call it but I'll add a check or implementation if missing.
+        // Actually, looking at existing code I read, there is NO resetDesktopStats.
+        // I should implement it or remove the call if it breaks.
+        // Guide says:
+        // resetHeroStats();
+        // resetDesktopStats();
+        // I will assume I need to add resetDesktopStats as well or avoiding calling it if not checking.
+        // Let's look at `index.html` again. I have `resetHeroStats`. I don't see `resetDesktopStats`.
+        // I will implement `resetDesktopStats` below `cleanupAllCharts` to be safe, or inside it.
+      }
+      resetDesktopStats();
+    }
+
+    function resetDesktopStats() {
+      // helper to reset desktop stats
+      const badgeEl = document.getElementById('chartDataBadge');
+      if (badgeEl) badgeEl.style.opacity = '1';
+      const dateEl = document.getElementById('perfScrubDate');
+      if (dateEl) dateEl.style.display = 'none';
+
+      if (window.currentViewStats) {
+        const valueEl = document.getElementById('perfCurrentValue');
+        if (valueEl) valueEl.textContent = PortfolioApp.formatCurrency(window.currentViewStats.grandTotal || window.currentViewStats.newest); // Fallback
+        // We might want to reset other fields too but usually scrubbing only affects the header value and date.
+      }
     }
 
     // Mobile View Switching (Bottom Nav)
@@ -976,9 +1035,10 @@
         if (btnDays === days) btn.classList.add('active');
       });
 
-      // Show loading
+      // ✅ Show loading on BOTH desktop and mobile
       const historyEmpty = document.getElementById('historyEmpty');
       const chartStats = document.getElementById('chartStats');
+      const mobileLoading = document.getElementById('mobileChartLoading');
 
       if (historyEmpty) {
         historyEmpty.innerHTML = `
@@ -991,6 +1051,12 @@
       }
       if (chartStats) chartStats.style.display = 'none';
 
+      // ✅ Show mobile loading indicator
+      if (mobileLoading) {
+        mobileLoading.style.display = 'flex';
+        mobileLoading.querySelector('.loading-dots').textContent = 'Loading';
+      }
+
       const apiDays = days === 0 ? 'max' : days;
 
       try {
@@ -998,6 +1064,11 @@
         const performance = await HistoricalPriceAPI.calculatePerformance(apiDays, {
           signal: currentChartController.signal
         });
+
+        // ✅ Hide mobile loading on success
+        if (mobileLoading) {
+          mobileLoading.style.display = 'none';
+        }
 
         // CACHE for Desktop Reset
         if (performance) {
@@ -1094,6 +1165,12 @@
           return;
         }
         console.error('Error loading historical data:', error);
+
+        // ✅ Hide mobile loading on error
+        if (mobileLoading) {
+          mobileLoading.style.display = 'none';
+        }
+
         if (historyEmpty) {
           historyEmpty.innerHTML = `
             <div style="text-align: center; padding: 40px;">
@@ -1743,17 +1820,27 @@
       // Initialize history chart
       updateHistoryChart(7);
 
-      // Handle resize for line charts
-      // Handle resize for line charts
-      // Handle resize for line charts
+      let chartDrawTimer = null;
+
+      function debouncedChartDraw(data) {
+        clearTimeout(chartDrawTimer);
+        chartDrawTimer = setTimeout(() => {
+          if (data && data.length > 0) {
+            drawMiniChart(data, 'heroMiniChart');
+            drawEnhancedLineChart(data, 'historyChart');
+          }
+          if (window.portfolioChart) {
+            window.portfolioChart.setupCanvas();
+            window.portfolioChart.draw();
+          }
+        }, 100);
+      }
+
       let resizeTimeout;
       window.addEventListener('resize', () => {
         clearTimeout(resizeTimeout);
         resizeTimeout = setTimeout(() => {
-          if (chartData && chartData.length > 0) {
-            drawEnhancedLineChart(chartData, 'historyChart');
-            drawMiniChart(chartData, 'heroMiniChart');
-          }
+          debouncedChartDraw(chartData);
         }, 150);
       });
 
