@@ -42,8 +42,10 @@ class PortfolioChart {
         const size = Math.min(rect.width, rect.height);
         this.centerX = rect.width / 2;
         this.centerY = rect.height / 2;
-        this.outerRadius = size / 2 - 10;
-        this.innerRadius = this.outerRadius * 0.6;
+
+        // Prevent negative radius (fixes IndexSizeError on hidden/small canvas)
+        this.outerRadius = size > 20 ? size / 2 - 10 : 0;
+        this.innerRadius = this.outerRadius > 0 ? this.outerRadius * 0.6 : 0;
     }
 
     bindEvents() {

@@ -258,7 +258,7 @@ const DOMUtils = {
 
     const symbolText = [
       asset.symbol || '',
-      asset.coinmarketcapUCID ? `UCID: ${asset.coinmarketcapUCID}` : '',
+      asset.coinstatsId ? `ID: ${asset.coinstatsId}` : '',
       asset.manualPrice ? `Manual: $${asset.manualPrice}` : ''
     ].filter(Boolean).join(' • ');
 

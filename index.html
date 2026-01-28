@@ -193,10 +193,56 @@
       color: #ffb300;
       border: 1px solid rgba(255, 179, 0, 0.3);
     }
+
+    /* Pull to Refresh */
+    .refresh-loader {
+      position: fixed;
+      top: -60px;
+      left: 0;
+      width: 100%;
+      height: 60px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+      transition: transform 0.2s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+      pointer-events: none;
+    }
+
+    .refresh-spinner {
+      width: 24px;
+      height: 24px;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      border-top-color: var(--accent-crypto);
+      border-radius: 50%;
+      opacity: 0;
+      transform: scale(0.8);
+      transition: opacity 0.2s, transform 0.2s;
+    }
+
+    .refresh-spinner.spinning {
+      animation: spin 0.8s linear infinite;
+    }
+
+    .refresh-loader.visible .refresh-spinner {
+      opacity: 1;
+      transform: scale(1) rotate(0deg);
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
   </style>
 </head>
 
 <body>
+  <!-- Pull to Refresh Loader -->
+  <div class="refresh-loader" id="refreshLoader">
+    <div class="refresh-spinner" id="refreshSpinner"></div>
+  </div>
+
   <!-- Fixed Mobile Toggle -->
   <div class="fixed-mobile-toggle" id="fixedMobileToggle">
     <label title="Toggle Mobile Mode">
@@ -249,6 +295,8 @@
           <div class="mobile-hero-main">
             <div class="mobile-hero-label">Total Balance</div>
             <div class="mobile-hero-value" id="heroTotalValue">$0</div>
+            <div id="heroScrubDate"
+              style="display: none; color: var(--text-secondary); font-size: 14px; margin-bottom: 4px;"></div>
             <div class="mobile-hero-pnl" id="heroPnlContainer">
               <span class="mobile-pnl-amount" id="heroPnlAmount">$0</span>
               <span class="mobile-pnl-badge positive" id="heroPnlBadge">
@@ -365,6 +413,8 @@
                   Performance <span id="chartDataBadge" class="chart-data-badge" style="display: none;"></span>
                 </div>
                 <div class="performance-value" id="perfCurrentValue">$0</div>
+                <div id="perfScrubDate"
+                  style="font-size: 0.9rem; color: var(--text-muted); margin-top: 4px; display: none;"></div>
               </div>
               <div class="performance-change positive" id="perfChange">
                 <span id="perfChangeIcon">↑</span>
@@ -504,6 +554,7 @@
 
       try {
         const data = await PortfolioApp.calculatePortfolio();
+        window.lastPortfolioData = data; // Cache for UI restoration
         updateUI(data);
         chart.update(data);
       } catch (error) {
@@ -595,7 +646,7 @@
         if (heroPnlContainer) heroPnlContainer.style.display = 'none';
       }
 
-      // Update performance chart header
+      // Update performance chart header (Desktop)
       const perfCurrentValue = document.getElementById('perfCurrentValue');
       if (perfCurrentValue) {
         perfCurrentValue.textContent = PortfolioApp.formatCurrency(data.grandTotal);
@@ -774,6 +825,114 @@
       refreshData();
     });
 
+    // Pull to Refresh Logic
+    function initPullToRefresh() {
+      const loader = document.getElementById('refreshLoader');
+      const spinner = document.getElementById('refreshSpinner');
+      const main = document.querySelector('main');
+
+      let startY = 0;
+      let currentY = 0;
+      let isPulling = false;
+      let isRefreshing = false;
+
+      const THRESHOLD = 80; // Pull distance to trigger refresh
+      const MAX_PULL = 120; // Max visual pull distance
+
+      document.body.addEventListener('touchstart', (e) => {
+        // Only active in mobile mode and at top of page
+        if (!document.body.classList.contains('mobile-mode') || window.scrollY > 0) return;
+
+        // Prevent if touching a chart (to avoid conflict with scrubbing)
+        if (e.target.tagName === 'CANVAS') return;
+
+        startY = e.touches[0].clientY;
+        isPulling = true;
+        loader.style.transition = 'none'; // distinct types
+      }, { passive: true });
+
+      document.body.addEventListener('touchmove', (e) => {
+        if (!isPulling || isRefreshing) return;
+
+        const y = e.touches[0].clientY;
+        const delta = y - startY;
+
+        // Only handle pull down when at top
+        if (delta > 0 && window.scrollY <= 0) {
+          // Add resistance
+          currentY = Math.min(delta * 0.5, MAX_PULL);
+
+          loader.style.transform = `translateY(${currentY}px)`;
+          main.style.transform = `translateY(${currentY}px)`; // Pull content too
+
+          // Visual feedback
+          if (currentY > 60) {
+            loader.classList.add('visible');
+            const rotation = (currentY - 60) * 10;
+            spinner.style.transform = `scale(1) rotate(${rotation}deg)`;
+          } else {
+            loader.classList.remove('visible');
+            spinner.style.transform = `scale(${currentY / 60})`;
+          }
+
+          // Prevent default scrolling if we are pulling specifically
+          if (e.cancelable && delta > 10) {
+            e.preventDefault();
+          }
+        } else {
+          // Restore if scrolling back up
+          resetPosition();
+        }
+      }, { passive: false });
+
+      document.body.addEventListener('touchend', async () => {
+        if (!isPulling || isRefreshing) return;
+
+        isPulling = false;
+        loader.style.transition = 'transform 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28)';
+        main.style.transition = 'transform 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28)';
+
+        if (currentY >= THRESHOLD) {
+          // Trigger Refresh
+          isRefreshing = true;
+          currentY = 60; // Snap to loading position
+
+          loader.style.transform = `translateY(${currentY}px)`;
+          main.style.transform = `translateY(${currentY}px)`;
+          spinner.classList.add('spinning');
+
+          // Haptic feedback if available
+          if (navigator.vibrate) navigator.vibrate(50);
+
+          try {
+            await initDashboard(); // Reuse existing refresh logic
+            ToastManager.success('Updated');
+          } catch (err) {
+            ToastManager.error('Update failed');
+          } finally {
+            setTimeout(() => {
+              isRefreshing = false;
+              spinner.classList.remove('spinning');
+              resetPosition();
+            }, 500); // Min delay suitable for UX
+          }
+
+        } else {
+          resetPosition();
+        }
+      });
+
+      function resetPosition() {
+        currentY = 0;
+        loader.style.transform = '';
+        main.style.transform = '';
+        setTimeout(() => {
+          loader.style.transition = '';
+          main.style.transition = '';
+        }, 300);
+      }
+    }
+
     // History Chart Functions
     let chartData = [];
     let chartCanvas = null;
@@ -818,6 +977,11 @@
       try {
         // Fetch performance data (now uses purchase dates automatically!)
         const performance = await HistoricalPriceAPI.calculatePerformance(apiDays);
+
+        // CACHE for Desktop Reset
+        if (performance) {
+          window.currentViewStats = performance;
+        }
 
         if (!performance || !performance.history || performance.history.length < 2) {
           if (historyEmpty) {
@@ -885,6 +1049,20 @@
           perfChangeValue.textContent = `${isPositive ? '+' : ''}${performance.changePercent.toFixed(1)}%`;
         }
 
+        // Update Mobile Hero PnL (Dynamic based on timeframe)
+        const heroPnlBadge = document.getElementById('heroPnlBadge');
+        const heroPnlAmount = document.getElementById('heroPnlAmount');
+        const heroPnlPercent = document.getElementById('heroPnlPercent');
+
+        if (heroPnlBadge && heroPnlAmount && heroPnlPercent) {
+          const sign = isPositive ? '+' : '';
+          heroPnlBadge.className = `mobile-pnl-badge ${isPositive ? 'positive' : 'negative'}`;
+          heroPnlPercent.textContent = `${isPositive ? '↑' : '↓'} ${sign}${performance.changePercent.toFixed(1)}%`;
+          // Show "24H", "7D" etc badge next to amount to verify context? No, just amount is fine per design.
+          heroPnlAmount.textContent = `${sign}${PortfolioApp.formatCurrency(performance.change)}`;
+          heroPnlAmount.className = `mobile-pnl-amount ${isPositive ? 'positive' : 'negative'}`;
+        }
+
         // Draw charts
         drawEnhancedLineChart(performance.history, 'historyChart');
         drawMiniChart(performance.history, 'heroMiniChart');
@@ -908,6 +1086,9 @@
     function drawEnhancedLineChart(data, canvasId) {
       const canvas = document.getElementById(canvasId);
       if (!canvas) return;
+
+      // Prevent drawing on hidden/zero-sized canvas (Fixes IndexSizeError)
+      if (canvas.clientWidth === 0 || canvas.clientHeight === 0) return;
 
       chartCanvas = canvas;
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -1056,8 +1237,166 @@
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      showChartTooltip(e.clientX, e.clientY, closest, canvas);
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Mobile Handling: Update Hero Stats instead of Tooltip
+      if (canvas.id === 'heroMiniChart') {
+        const startData = points[0].data;
+        updateHeroStats(closest.data, startData);
+      } else if (canvas.id === 'historyChart') {
+        const startData = points[0].data;
+        updateDesktopStats(closest.data, startData);
+        // Also show tooltip for precision
+        showChartTooltip(e.clientX, e.clientY, closest, canvas);
+      } else {
+        showChartTooltip(e.clientX, e.clientY, closest, canvas);
+      }
     }
+
+    // New function to update hero stats on mobile scrub
+    function updateHeroStats(data, baseData) {
+      const balanceEl = document.getElementById('heroTotalValue');
+      const pnlContainer = document.getElementById('heroPnlContainer');
+      const dateEl = document.getElementById('heroScrubDate');
+      const pnlAmountEl = document.getElementById('heroPnlAmount');
+      const pnlPercentEl = document.getElementById('heroPnlPercent');
+
+      if (balanceEl) balanceEl.textContent = PortfolioApp.formatCurrency(data.total);
+
+      // Calculate PnL relative to the start of the chart (timeframe)
+      let change = 0;
+      let percent = 0;
+
+      if (baseData && baseData.total > 0) {
+        change = data.total - baseData.total;
+        percent = (change / baseData.total) * 100;
+      }
+
+      const isPositive = change >= 0;
+      const sign = isPositive ? '+' : '';
+      const color = isPositive ? 'var(--success)' : 'var(--danger)';
+
+      if (pnlAmountEl) {
+        pnlAmountEl.textContent = `${sign}${PortfolioApp.formatCurrency(change)}`;
+        pnlAmountEl.style.color = color;
+        pnlAmountEl.style.display = '';
+      }
+
+      if (pnlPercentEl) {
+        pnlPercentEl.textContent = `(${sign}${percent.toFixed(2)}%)`;
+        pnlPercentEl.style.color = color;
+        pnlPercentEl.style.display = '';
+      }
+
+      // Show PnL container
+      if (pnlContainer) pnlContainer.style.display = 'flex';
+
+      // Show Date
+      if (dateEl) {
+        const date = new Date(data.date);
+        dateEl.textContent = date.toLocaleDateString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit'
+        });
+        dateEl.style.display = 'block';
+      }
+    }
+
+    // Update Desktop Stats on Hover
+    function updateDesktopStats(data, baseData) {
+      const valueEl = document.getElementById('perfCurrentValue');
+      const changeEl = document.getElementById('perfChange');
+      const changeValueEl = document.getElementById('perfChangeValue');
+      const changeIconEl = document.getElementById('perfChangeIcon');
+      const badgeEl = document.getElementById('chartDataBadge');
+      const dateEl = document.getElementById('perfScrubDate'); // Added date element
+
+      if (valueEl) valueEl.textContent = PortfolioApp.formatCurrency(data.total);
+
+      // Hide accuracy badge while scrubbing
+      if (badgeEl) badgeEl.style.opacity = '0.5';
+
+      // Update Date
+      if (dateEl) {
+        const date = new Date(data.date || data.timestamp);
+        dateEl.textContent = date.toLocaleDateString('en-US', {
+          weekday: 'short',
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit'
+        });
+        dateEl.style.display = 'block';
+      }
+
+      // Calculate Change relative to start of chart
+      let change = 0;
+      let percent = 0;
+      if (baseData && baseData.total > 0) {
+        change = data.total - baseData.total;
+        percent = (change / baseData.total) * 100;
+      }
+
+      const isPositive = change >= 0;
+      if (changeEl) {
+        changeEl.className = `performance-change ${isPositive ? 'positive' : 'negative'}`;
+      }
+      if (changeValueEl) {
+        changeValueEl.textContent = `${isPositive ? '+' : ''}${percent.toFixed(2)}%`;
+      }
+      if (changeIconEl) {
+        changeIconEl.textContent = isPositive ? '↑' : '↓';
+      }
+    }
+
+    // Reset Desktop Stats on Mouse Leave
+    function resetDesktopStats() {
+      const valueEl = document.getElementById('perfCurrentValue');
+      const changeEl = document.getElementById('perfChange');
+      const changeValueEl = document.getElementById('perfChangeValue');
+      const changeIconEl = document.getElementById('perfChangeIcon');
+      const badgeEl = document.getElementById('chartDataBadge');
+      const dateEl = document.getElementById('perfScrubDate');
+
+      if (badgeEl) badgeEl.style.opacity = '1';
+      if (dateEl) dateEl.style.display = 'none';
+
+      if (window.lastPortfolioData) {
+        const { grandTotal, totalProfitLossPercent } = window.lastPortfolioData;
+
+        // Wait, window.lastPortfolioData only has current total and All-Time PnL?
+        // Actually, updateHistoryChart sets these values based on the *selected timeframe*.
+        // We should store the "active timeframe stats" somewhere to reset to.
+        // Or re-calculate?
+        // Let's store the current displayed stats in data attributes before hovering?
+        // No, simplest is to re-trigger a UI update from the active button context, 
+        // OR better: cache the "current view stats" in a global object when updateHistoryChart finishes.
+      }
+
+      // Fallback: If we have lastPortfolioData, we can at least show current balance.
+      // But PnL needs to match the selected button (e.g. 24H change, not All Time).
+
+      // Let's try to parse the "active" button's intent or use a cached "currentStats" object.
+      // For now, let's look at updateHistoryChart again to see where it gets the data.
+      // It uses HistoricalPriceAPI.calculateStats(days).
+
+      // Strategy: When updateHistoryChart runs, save the result to window.currentViewStats.
+      if (window.currentViewStats) {
+        if (valueEl) valueEl.textContent = PortfolioApp.formatCurrency(window.currentViewStats.newest);
+
+        const isPositive = window.currentViewStats.change >= 0;
+        if (changeEl) changeEl.className = `performance-change ${isPositive ? 'positive' : 'negative'}`;
+        if (changeValueEl) changeValueEl.textContent = `${isPositive ? '+' : ''}${window.currentViewStats.changePercent.toFixed(2)}%`;
+        if (changeIconEl) changeIconEl.textContent = isPositive ? '↑' : '↓';
+      }
+    }
+
+
 
     function showChartTooltip(mouseX, mouseY, point, canvas) {
       const tooltip = document.getElementById('chartTooltipFloating');
@@ -1099,17 +1438,61 @@
       const tooltip = document.getElementById('chartTooltipFloating');
       if (tooltip) tooltip.classList.remove('visible');
 
+      // Reset Hero Stats (Mobile)
+      if (canvas && canvas.id === 'heroMiniChart') {
+        resetHeroStats();
+      }
+
+      // Reset Desktop Stats
+      if (canvas && canvas.id === 'historyChart') {
+        resetDesktopStats();
+      }
+
       // Restore clean chart
       if (canvas && canvas._baseImage && canvas._ctx) {
+        // ... (rest of function)
         canvas._ctx.putImageData(canvas._baseImage, 0, 0);
       }
     }
+
+    function resetHeroStats() {
+      const balanceEl = document.getElementById('heroTotalValue');
+      const pnlContainer = document.getElementById('heroPnlContainer');
+      const dateEl = document.getElementById('heroScrubDate');
+      const pnlAmountEl = document.getElementById('heroPnlAmount');
+      const pnlPercentEl = document.getElementById('heroPnlPercent');
+
+      // 1. Restore Visibility
+      if (dateEl) dateEl.style.display = 'none';
+
+      if (pnlContainer) {
+        pnlContainer.style.display = 'flex';
+        // Ensure children are visible if they were hidden individually
+        if (pnlAmountEl) pnlAmountEl.style.display = '';
+        if (pnlPercentEl) pnlPercentEl.style.display = '';
+      }
+
+      // 2. Restore Balance from cached valid data
+      if (window.lastPortfolioData && balanceEl) {
+        balanceEl.textContent = PortfolioApp.formatCurrency(window.lastPortfolioData.grandTotal);
+      } else if (balanceEl && balanceEl.textContent === '$0.00') {
+        // Fallback only if we really have nothing
+      }
+
+      // Note: We do NOT need to recalculate PnL because updateHeroStats logic 
+      // only hides the container; it does not modify the text values inside it.
+      // So simply showing the container restores the previous state immediately.
+    }
+
 
     function drawMiniChart(data, canvasId) {
       const canvas = document.getElementById(canvasId);
       if (!canvas) return;
 
-      const ctx = canvas.getContext('2d');
+      // Preventdrawing on hidden/zero-sized canvas
+      if (canvas.clientWidth === 0 || canvas.clientHeight === 0) return;
+
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
       const rect = canvas.parentElement.getBoundingClientRect();
 
       const dpr = window.devicePixelRatio || 1;
@@ -1124,8 +1507,16 @@
       const padding = { top: 5, right: 5, bottom: 5, left: 5 };
 
       const values = data.map(d => d.total);
-      const minVal = Math.min(...values) * 0.99;
-      const maxVal = Math.max(...values) * 1.01;
+      let minVal = Math.min(...values) * 0.99;
+      let maxVal = Math.max(...values) * 1.01;
+
+      // Handle flat line case (prevent division by zero)
+      if (maxVal === minVal) {
+        maxVal = minVal + 1; // Arbitrary range
+        if (minVal === 0) {
+          maxVal = 1; // Handle all zeros
+        }
+      }
 
       ctx.clearRect(0, 0, width, height);
 
@@ -1142,9 +1533,14 @@
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
 
+      const points = []; // Store points for interaction
+
       data.forEach((d, i) => {
         const x = padding.left + (i / (data.length - 1)) * (width - padding.left - padding.right);
         const y = padding.top + (1 - (d.total - minVal) / (maxVal - minVal)) * (height - padding.top - padding.bottom);
+
+        points.push({ x, y, data: d }); // Save point
+
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       });
@@ -1162,6 +1558,26 @@
       gradient.addColorStop(1, 'transparent');
       ctx.fillStyle = gradient;
       ctx.fill();
+
+      // INTERACTION SETUP
+      canvas._chartPoints = points;
+      canvas._baseImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      canvas._ctx = ctx;
+
+      // Mouse interaction
+      canvas.onmousemove = (e) => handleChartHover(e, canvas, points);
+      canvas.onmouseleave = () => hideChartTooltip(canvas);
+
+      // Touch interaction
+      canvas.ontouchstart = (e) => {
+        if (e.target === canvas) e.preventDefault();
+      };
+
+      canvas.ontouchmove = (e) => {
+        if (e.target === canvas) e.preventDefault();
+        const touch = e.touches[0];
+        handleChartHover({ clientX: touch.clientX, clientY: touch.clientY }, canvas, points);
+      };
     }
 
     // Offline Detection
@@ -1187,6 +1603,7 @@
       initTabSystem();
       initBottomNav();
       initDashboard();
+      initPullToRefresh(); // Initialize Pull to Refresh
 
       // Initialize history chart
       updateHistoryChart(7);
@@ -1200,8 +1617,8 @@
         }
       });
 
-      // Register Service Worker
-      if ('serviceWorker' in navigator) {
+      // Register Service Worker (only on http/https)
+      if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.protocol === 'http:')) {
         navigator.serviceWorker.register('./service-worker.js')
           .then(reg => console.log('SW registered'))
           .catch(err => console.log('SW registration failed', err));

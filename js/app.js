@@ -12,8 +12,8 @@ const AppConfig = {
     GITHUB_BASE: 'https://api.github.com/gists',
     EXCHANGE_RATE: 'https://api.exchangerate-api.com/v4/latest/USD',
     RATE_LIMIT: {
-      MAX_REQUESTS: 20, // CoinStats has better limits
-      PER_MINUTE: 60000
+      MAX_REQUESTS: 3, // Safe limit (3 req/sec) to avoid 429s (max 5)
+      PER_MINUTE: 1000 // 1s sliding window
     }
   },
   CACHE: {
@@ -23,7 +23,7 @@ const AppConfig = {
   STORAGE: {
     ASSETS_KEY: 'portfolio_assets',
     GIST_ID_KEY: 'portfolio_gist_id',
-    API_KEY: 'portfolio_coinstats_api_key', // Changed from CMC
+    API_KEY: 'portfolio_coinstats_api_key',
     BACKUPS_KEY: 'portfolio_backups',
     MAX_BACKUPS: 10
   },
@@ -222,14 +222,17 @@ class RateLimiter {
 
     const batch = this.queue.splice(0, this.maxRequests);
 
-    try {
-      const results = await Promise.all(
-        batch.map(({ fn }) => fn())
-      );
-      batch.forEach(({ resolve }, i) => resolve(results[i]));
-    } catch (error) {
-      batch.forEach(({ reject }) => reject(error));
-    }
+    const promises = batch.map(({ fn }) => fn());
+    const results = await Promise.allSettled(promises);
+
+    batch.forEach(({ resolve, reject }, i) => {
+      const result = results[i];
+      if (result.status === 'fulfilled') {
+        resolve(result.value);
+      } else {
+        reject(result.reason);
+      }
+    });
 
     this.processing = false;
 
@@ -694,11 +697,10 @@ const HistoryTracker = {
 
 // ============ CoinStats Historical Price API ============
 const HistoricalPriceAPI = {
-  CACHE_KEY: 'portfolio_historical_cache_v5', // New version
+  CACHE_KEY: 'portfolio_historical_cache_v9', // Invalidate old cache for aggregation fix
   CACHE_DURATION: 24 * 60 * 60 * 1000,
 
-  lastCallTime: 0,
-  MIN_CALL_INTERVAL: 500, // CoinStats is more lenient
+  // Rate limiting handled globally by apiRateLimiter
 
   getCache() {
     try {
@@ -737,76 +739,144 @@ const HistoricalPriceAPI = {
   },
 
   /**
+   * Downsample history data to match desired chart granularity
+   * AND normalize timestamps to align multiple assets
+   */
+  downsampleHistory(history, period) {
+    if (!history || history.length < 2) return history;
+
+    let step = 1;
+    let intervalMs = 0;
+
+    if (period === '24h') {
+      // 5 min -> 1 hour (factor 12)
+      step = 12;
+      intervalMs = 3600 * 1000; // 1 hour
+    } else if (period === '1w') {
+      // 1 hour -> 6 hours (factor 6)
+      step = 6;
+      intervalMs = 6 * 3600 * 1000; // 6 hours
+    } else {
+      // For 1M+, enforce 1 point per day (Closing Price)
+      // This prevents aggregating multiple intraday points into a single "Date" key
+      const uniqueDays = {};
+      history.forEach(p => {
+        uniqueDays[p.date] = p; // Overwrite, keeping the latest point for the day
+      });
+      return Object.values(uniqueDays).sort((a, b) => a.timestamp - b.timestamp);
+    }
+
+    console.log(`📉 Downsampling ${period}: ${history.length} points -> ~${Math.ceil(history.length / step)} points (Step ${step})`);
+
+    const filtered = history.filter((_, index) => index % step === 0);
+
+    // Normalize timestamps to grid to ensure assets align during aggregation
+    if (intervalMs > 0) {
+      filtered.forEach(point => {
+        // Snap to nearest interval (floor)
+        const snapped = Math.floor(point.timestamp / intervalMs) * intervalMs;
+        point.timestamp = snapped;
+        // Keep date string consistent with snapped grid?
+        // Actually for 24H/1W we might cross midnight boundaries if we just keep original date.
+        // But for aggregation we rely on timestamp for isShortTerm.
+        // For tooltip, we want precise date.
+        point.date = new Date(snapped).toISOString();
+      });
+    }
+
+    // Make sure we keep the very last point
+    const lastPoint = history[history.length - 1];
+    // Snap last point too if relevant?
+    // If we snapped everything else, last point might not match grid.
+    // Ideally we push the exact last point for accuracy.
+    if (filtered[filtered.length - 1] !== lastPoint) {
+      // Check if lastPoint is already covered by the snapping bucket of the last filtered item?
+      // No, just push it. Aggregation handles timestamp keys.
+      filtered.push(lastPoint);
+    }
+
+    return filtered;
+  },
+
+  /**
    * Fetch historical prices from CoinStats
    * @param {string} coinId - CoinStats coin ID (e.g., "bitcoin")
    * @param {number|string} days - Number of days (1, 7, 30, 90, 180, 365, "max")
    */
   async fetchHistoricalPrices(coinId, days) {
+    return this.fetchHistoricalPrices_impl(coinId, days);
+  },
+
+  // Helper to allow cleaner reading (dummy wrapper, actual logic below)
+  async fetchHistoricalPrices_impl(coinId, days) {
     const cacheKey = `${coinId}_${days}`;
     const cache = this.getCache();
 
     if (cache[cacheKey]) {
-      console.log(`✓ Cache hit: ${coinId} (${days} days)`);
+      console.log(`✓ Cache hit: ${coinId} (${days} days) | Points: ${cache[cacheKey].data.length}`);
       return cache[cacheKey].data;
     }
 
     console.log(`⚠ Cache miss: ${coinId} (${days} days) - fetching...`);
 
     try {
-      const apiKey = CoinStatsAPIKeyManager.get();
-      const headers = {
-        'Accept': 'application/json'
-      };
+      // Use centralized rate limiter
+      return apiRateLimiter.execute(async () => {
+        // ... (headers prep)
+        const apiKey = CoinStatsAPIKeyManager.get();
+        const headers = {
+          'Accept': 'application/json'
+        };
 
-      if (apiKey) {
-        headers['X-API-KEY'] = apiKey;
-      }
-
-      // Rate limiting
-      const timeSinceLastCall = Date.now() - this.lastCallTime;
-      if (timeSinceLastCall < this.MIN_CALL_INTERVAL) {
-        await new Promise(resolve =>
-          setTimeout(resolve, this.MIN_CALL_INTERVAL - timeSinceLastCall)
-        );
-      }
-
-      this.lastCallTime = Date.now();
-
-      // Map days to period
-      const period = days === 'max' || days === 0 ? 'all' :
-        days <= 1 ? '24h' :
-          days <= 7 ? '1w' :
-            days <= 30 ? '1m' :
-              days <= 90 ? '3m' :
-                days <= 180 ? '6m' :
-                  days <= 365 ? '1y' : 'all';
-
-      // CoinStats charts endpoint
-      const response = await fetch(
-        `${AppConfig.API.COINSTATS_BASE}/coins/${coinId}/charts?period=${period}`,
-        { headers }
-      );
-
-      if (!response.ok) {
-        if (response.status === 429) {
-          throw new Error('Rate limit exceeded');
+        if (apiKey) {
+          headers['X-API-KEY'] = apiKey;
         }
-        throw new Error(`API returned ${response.status}`);
-      }
 
-      const data = await response.json();
+        // Map days to period
+        const period = days === 'max' || days === 0 ? 'all' :
+          days <= 1 ? '24h' :
+            days <= 7 ? '1w' :
+              days <= 30 ? '1m' :
+                days <= 90 ? '3m' :
+                  days <= 180 ? '6m' :
+                    days <= 365 ? '1y' : 'all';
 
-      // Transform to our format
-      const transformed = data.map(point => ({
-        date: new Date(point[0]).toISOString().split('T')[0],
-        timestamp: point[0],
-        price: point[1]
-      }));
+        console.log(`🔄 Fetching ${coinId} for ${days} days (Period: ${period})`);
+        // ...
 
-      // Cache the result
-      this.setCache(cacheKey, transformed);
+        // CoinStats charts endpoint
+        const response = await fetch(
+          `${AppConfig.API.COINSTATS_BASE}/coins/${coinId}/charts?period=${period}`,
+          { headers }
+        );
 
-      return transformed;
+        if (!response.ok) {
+          if (response.status === 429) {
+            throw new Error('Rate limit exceeded');
+          }
+          throw new Error(`API returned ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        // Transform to our format
+        const transformed = data.map(point => {
+          const timestampMs = point[0] * 1000;
+          return {
+            date: new Date(timestampMs).toISOString().split('T')[0],
+            timestamp: timestampMs,
+            price: point[1]
+          };
+        });
+
+        // Downsample if needed (24h -> 1h gap, 1w -> 6h gap)
+        const finalHistory = this.downsampleHistory(transformed, period);
+
+        // Cache the result
+        this.setCache(cacheKey, finalHistory);
+
+        return finalHistory;
+      });
     } catch (error) {
       console.error(`Failed to fetch ${coinId}:`, error);
 
@@ -888,9 +958,8 @@ const HistoricalPriceAPI = {
 
     console.log(`📊 Cache: ${Object.keys(results).length} hits, ${toFetch.length} misses`);
 
-    // Fetch missing data
-    for (let i = 0; i < toFetch.length; i++) {
-      const asset = toFetch[i];
+    // Fetch missing data concurrently (managed by RateLimiter)
+    await Promise.all(toFetch.map(async (asset) => {
       const identifier = asset.coinstatsId || asset.symbol.toLowerCase();
 
       try {
@@ -901,11 +970,6 @@ const HistoricalPriceAPI = {
           priceHistory,
           fromCache: false
         };
-
-        // Delay between requests
-        if (i < toFetch.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 600));
-        }
       } catch (error) {
         console.error(`Failed to fetch ${asset.name}:`, error);
         results[asset.id] = {
@@ -914,7 +978,7 @@ const HistoricalPriceAPI = {
           fromCache: false
         };
       }
-    }
+    }));
 
     return results;
   },
@@ -1073,9 +1137,10 @@ const HistoricalPriceAPI = {
       await this.batchFetchHistoricalPrices(trackedAssets, days);
     }
 
-    console.log('✓ Cache pre-warming complete');
   }
 };
+
+
 
 // ============ Purchase Date Based Performance Calculator ============
 // ============ Enhanced Purchase Date Performance with Batch Loading ============
@@ -1131,17 +1196,37 @@ const PurchaseDatePerformance = {
       const purchaseDate = new Date(asset.purchaseDate);
       const balance = parseFloat(asset.balance || 0);
 
-      // Filter to post-purchase dates
+      // Filter logic:
+      // - For short timeframes (<= 7 days): Keep pre-purchase dates to show 0 -> Buy value transition
+      // - For long timeframes (> 7 days): Filter pre-purchase dates to zoom in on active history
+      const isLongTerm = days > 7 || days === 'max' || days === 0;
+
       const relevantPrices = result.priceHistory.filter(point => {
         const pointDate = new Date(point.date);
-        return pointDate >= purchaseDate;
+
+        // Always filter future dates (sanity check)
+        if (pointDate > new Date()) return false;
+
+        if (isLongTerm) {
+          // Strict filtering for long-term: only show post-purchase
+          return pointDate >= purchaseDate;
+        } else {
+          // Loose filtering for short-term: keep context
+          return true;
+        }
       });
 
       // Add purchase price if available
       const purchaseDateStr = purchaseDate.toISOString().split('T')[0];
       const hasPurchasePoint = relevantPrices.some(p => p.date === purchaseDateStr);
 
-      if (!hasPurchasePoint && asset.buyPrice) {
+      // Only inject purchase date if:
+      // 1. It's missing
+      // 2. AND (We are in 'ALL' mode OR the purchase date is within the requested window)
+      // This prevents "24H" view from showing a point from weeks ago
+      const isWithinWindow = (days === 'max' || days === 0) || (purchaseDate >= startDate);
+
+      if (!hasPurchasePoint && asset.buyPrice && isWithinWindow) {
         relevantPrices.unshift({
           date: purchaseDateStr,
           timestamp: purchaseDate.getTime(),
@@ -1161,7 +1246,7 @@ const PurchaseDatePerformance = {
     const portfolioByDate = this.aggregatePortfolioHistory(results, startDate, totalDays);
 
     const history = Object.values(portfolioByDate).sort((a, b) =>
-      new Date(a.date) - new Date(b.date)
+      a.timestamp - b.timestamp
     );
 
     const successCount = results.filter(r => r.priceHistory.length > 0).length;
@@ -1173,17 +1258,28 @@ const PurchaseDatePerformance = {
   /**
    * Aggregate portfolio history (unchanged)
    */
+  /**
+   * Aggregate portfolio history (improved for intraday)
+   */
   aggregatePortfolioHistory(results, startDate, days) {
     const portfolioByDate = {};
+    const isShortTerm = days <= 1; // 24H view need sub-daily resolution
 
     results.forEach(({ asset, priceHistory, balance, purchaseDate }) => {
       if (!priceHistory || priceHistory.length === 0) return;
 
       priceHistory.forEach(({ date, timestamp, price }) => {
-        if (!portfolioByDate[date]) {
-          portfolioByDate[date] = {
-            date,
-            timestamp,
+        // For short term, use specific timestamp key to preserve hourly points
+        // For long term, stick to date string to aggregate daily
+        // CORRECTION: isShortTerm should be days <= 7 ? 
+        // If days <= 7, key by timestamp.
+        const shouldUseTimestamp = days <= 7;
+        const effectiveKey = shouldUseTimestamp ? new Date(timestamp).toISOString() : date;
+
+        if (!portfolioByDate[effectiveKey]) {
+          portfolioByDate[effectiveKey] = {
+            date: date,
+            timestamp: timestamp,
             total: 0,
             crypto: 0,
             stocks: 0,
@@ -1193,10 +1289,21 @@ const PurchaseDatePerformance = {
           };
         }
 
-        const value = price * balance;
-        portfolioByDate[date].total += value;
-        portfolioByDate[date][asset.category] += value;
-        portfolioByDate[date].breakdown[asset.id] = {
+        // Zero-fill if before purchase date (for short-term context)
+        const isPrePurchase = date < purchaseDate;
+        const value = isPrePurchase ? 0 : (price * balance);
+
+        // Handle Overwrite for same asset
+        const existingAssetData = portfolioByDate[effectiveKey].breakdown[asset.id];
+        if (existingAssetData) {
+          // Subtract old value to avoid double counting
+          portfolioByDate[effectiveKey].total -= existingAssetData.value;
+          portfolioByDate[effectiveKey][asset.category] -= existingAssetData.value;
+        }
+
+        portfolioByDate[effectiveKey].total += value;
+        portfolioByDate[effectiveKey][asset.category] += value;
+        portfolioByDate[effectiveKey].breakdown[asset.id] = {
           value,
           price,
           balance,
@@ -1266,7 +1373,7 @@ window.Utils = Utils;
 
 // ============ Main Portfolio Application (Improved) ============
 const PortfolioApp = {
-  API_BASE: AppConfig.API.COINGECKO_BASE,
+  API_BASE: AppConfig.API.COINSTATS_BASE,
   GIST_API: AppConfig.API.GITHUB_BASE,
 
   STORAGE_KEY: AppConfig.STORAGE.ASSETS_KEY,
@@ -1281,6 +1388,8 @@ const PortfolioApp = {
   isAuthenticated() {
     return !!this._sessionToken;
   },
+
+
 
   setSessionToken(token) {
     this._sessionToken = token;
@@ -1394,6 +1503,8 @@ const PortfolioApp = {
       throw new AppError('Not authenticated', 'AUTH_ERROR');
     }
 
+    // Verify migration ran
+    // this.performMigration(); // Removed per user request
     const assets = this.getAssets();
     const gistId = this.getGistId();
     const apiKey = CoinStatsAPIKeyManager.get(); // Changed
@@ -1801,6 +1912,8 @@ const PortfolioApp = {
 };
 
 window.PortfolioApp = PortfolioApp;
+window.HistoricalPriceAPI = HistoricalPriceAPI;
+window.PurchaseDatePerformance = PurchaseDatePerformance;
 
 // Auto pre-warm cache on page load (after 2 seconds)
 setTimeout(() => {
