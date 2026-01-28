@@ -258,7 +258,7 @@ const DOMUtils = {
 
     const symbolText = [
       asset.symbol || '',
-      asset.coingeckoId ? `API: ${asset.coingeckoId}` : '',
+      asset.coinmarketcapUCID ? `UCID: ${asset.coinmarketcapUCID}` : '',
       asset.manualPrice ? `Manual: $${asset.manualPrice}` : ''
     ].filter(Boolean).join(' • ');
 

@@ -157,23 +157,41 @@
             <div class="admin-grid">
                 <!-- Left Column: Input Forms -->
                 <div style="display: flex; flex-direction: column; gap: var(--spacing-lg);">
-                    <!-- API Key Configuration -->
+                    <!-- CoinMarketCap API Configuration -->
                     <div class="card fade-in" id="apiKeyCard">
-                        <div class="card-title">🔑 API Configuration (CryptoCompare)</div>
+                        <div class="card-title">🔑 CoinMarketCap API Key</div>
+                        <p style="color: var(--text-secondary); margin-bottom: var(--spacing-md); font-size: 0.9rem;">
+                            Your API key syncs across devices via Gist. Free tier: 10,000 calls/month (~333/day).
+                        </p>
+
                         <div class="form-group">
-                            <label class="form-label" for="apiKeyInput">API Key</label>
-                            <input type="password" class="form-input" id="apiKeyInput"
-                                placeholder="Paste your API key here">
+                            <label class="form-label" for="cmcApiKey">API Key</label>
+                            <input type="password" class="form-input" id="cmcApiKey"
+                                placeholder="Enter your CoinMarketCap API key">
                             <div class="form-hint">
-                                Get a free key at <a href="https://min-api.cryptocompare.com" target="_blank"
-                                    style="color: var(--accent-crypto);">min-api.cryptocompare.com</a>
+                                <a href="https://pro.coinmarketcap.com/signup" target="_blank"
+                                    style="color: var(--accent-crypto);">
+                                    Get free API key (10k requests/month) →
+                                </a>
                             </div>
                         </div>
-                        <div style="display: flex; gap: 10px;">
-                            <button class="btn btn-primary" id="saveApiKeyBtn" style="flex: 1;">Save Key</button>
-                            <button class="btn btn-danger" id="clearApiKeyBtn" style="display: none;">Remove</button>
+
+                        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                            <button class="btn btn-primary" id="saveCMCKeyBtn">
+                                💾 Save API Key
+                            </button>
+                            <button class="btn btn-secondary" id="testCMCKeyBtn">
+                                🧪 Test Connection
+                            </button>
+                            <button type="button" class="btn btn-secondary" id="showCMCKeyBtn">
+                                👁️ Show Key
+                            </button>
+                            <button class="btn btn-danger" id="clearCMCKeyBtn">
+                                🗑️ Clear Key
+                            </button>
                         </div>
-                        <div id="apiKeyStatus" style="margin-top: 10px; font-size: 0.9rem;"></div>
+
+                        <div id="cmcApiKeyStatus" style="margin-top: 12px; display: none;"></div>
                     </div>
 
                     <!-- Add Asset Form -->
@@ -210,14 +228,29 @@
                             <div class="form-group">
                                 <label class="form-label" for="assetSymbol">
                                     Symbol
-                                    <span style="color: var(--text-muted); font-weight: normal;">(required for
-                                        API)</span>
+                                    <span style="color: var(--text-muted); font-weight: normal;">(required)</span>
                                 </label>
                                 <input type="text" class="form-input" id="assetSymbol"
                                     placeholder="e.g., BTC, ETH, AAPL, PAXG" required>
                             </div>
 
-                            <!-- Removed CoinGecko ID field (using Symbol for lookup) -->
+                            <!-- CoinMarketCap UCID -->
+                            <div class="form-group">
+                                <label class="form-label" for="coinmarketcapUCID">
+                                    CoinMarketCap UCID
+                                    <span style="color: var(--text-muted); font-weight: normal;">(optional, for better
+                                        accuracy)</span>
+                                </label>
+                                <input type="text" class="form-input" id="coinmarketcapUCID"
+                                    placeholder="e.g., 1 (Bitcoin), 1027 (Ethereum)">
+                                <div class="form-hint">
+                                    Find UCIDs at <a href="https://coinmarketcap.com" target="_blank"
+                                        style="color: var(--accent-crypto);">coinmarketcap.com</a>
+                                    (URL: coinmarketcap.com/currencies/bitcoin → UCID is in page data)
+                                    <br>
+                                    <strong>Or just use Symbol</strong> - UCID is optional but more accurate
+                                </div>
+                            </div>
 
                             <!-- Manual Price (alternative to CoinGecko) -->
                             <div class="form-group">
@@ -350,38 +383,44 @@
                 </div>
             </div>
 
-            <!-- Popular Assets Reference -->
+            <!-- Popular CoinMarketCap UCIDs Reference -->
             <div class="card fade-in" style="margin-top: var(--spacing-lg);">
-                <div class="card-title">Popular CoinGecko IDs Reference</div>
+                <div class="card-title">Popular CoinMarketCap UCIDs</div>
                 <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem;">
                     <div>
-                        <strong style="color: var(--accent-crypto);">Crypto:</strong>
+                        <strong style="color: var(--accent-crypto);">Major Coins:</strong>
                         <ul
                             style="list-style: none; color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.5rem;">
-                            <li>Bitcoin → <code style="color: var(--text-primary);">BTC</code></li>
-                            <li>Ethereum → <code style="color: var(--text-primary);">ETH</code></li>
-                            <li>Solana → <code style="color: var(--text-primary);">SOL</code></li>
-                            <li>BNB → <code style="color: var(--text-primary);">BNB</code></li>
+                            <li>Bitcoin → <code style="color: var(--text-primary);">1</code> (BTC)</li>
+                            <li>Ethereum → <code style="color: var(--text-primary);">1027</code> (ETH)</li>
+                            <li>BNB → <code style="color: var(--text-primary);">1839</code> (BNB)</li>
+                            <li>Solana → <code style="color: var(--text-primary);">5426</code> (SOL)</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <strong style="color: var(--accent-crypto);">Altcoins:</strong>
+                        <ul
+                            style="list-style: none; color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.5rem;">
+                            <li>NEAR → <code style="color: var(--text-primary);">6535</code></li>
+                            <li>Chainlink → <code style="color: var(--text-primary);">1975</code> (LINK)</li>
+                            <li>Aave → <code style="color: var(--text-primary);">7278</code></li>
+                            <li>Uniswap → <code style="color: var(--text-primary);">7083</code> (UNI)</li>
                         </ul>
                     </div>
                     <div>
                         <strong style="color: var(--accent-gold);">Tokenized Gold:</strong>
                         <ul
                             style="list-style: none; color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.5rem;">
-                            <li>PAX Gold → <code style="color: var(--text-primary);">PAXG</code></li>
-                            <li>Tether Gold → <code style="color: var(--text-primary);">XAUT</code></li>
-                        </ul>
-                    </div>
-                    <div>
-                        <strong style="color: var(--accent-stocks);">Tokenized Stocks:</strong>
-                        <ul
-                            style="list-style: none; color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.5rem;">
-                            <li>Search on CoinGecko for</li>
-                            <li>tokenized versions or</li>
-                            <li>use manual price input</li>
+                            <li>PAX Gold → <code style="color: var(--text-primary);">4705</code> (PAXG)</li>
+                            <li>Tether Gold → <code style="color: var(--text-primary);">5176</code> (XAUT)</li>
                         </ul>
                     </div>
                 </div>
+                <p style="margin-top: 1rem; font-size: 0.85rem; color: var(--text-muted);">
+                    💡 <strong>Pro Tip:</strong> Just use Symbol (BTC, ETH) - UCID is optional!<br>
+                    Find UCIDs at <a href="https://coinmarketcap.com" target="_blank"
+                        style="color: var(--accent-crypto);">coinmarketcap.com</a>
+                </p>
             </div>
         </main>
     </div>
@@ -402,66 +441,122 @@
             setupAuth();
             setupCategorySelector();
             setupForm();
-            setupApiKey(); // ✨ NEW
+            setupCMCApiKeyManagement(); // ✨ NEW
             setupSync();
             setupExport();
             renderAssetsList();
             setupBulkUpdate();
         }
 
-        // ============ API Key Management ============
-        function setupApiKey() {
-            const input = document.getElementById('apiKeyInput');
-            const saveBtn = document.getElementById('saveApiKeyBtn');
-            const clearBtn = document.getElementById('clearApiKeyBtn');
-            const status = document.getElementById('apiKeyStatus');
+        // ============ CoinMarketCap API Key Management ============
+        function setupCMCApiKeyManagement() {
+            const apiKeyInput = document.getElementById('cmcApiKey');
+            const saveBtn = document.getElementById('saveCMCKeyBtn');
+            const testBtn = document.getElementById('testCMCKeyBtn');
+            const showBtn = document.getElementById('showCMCKeyBtn');
+            const clearBtn = document.getElementById('clearCMCKeyBtn');
+            const statusDiv = document.getElementById('cmcApiKeyStatus');
 
-            const updateUI = () => {
-                const key = APIKeyManager.get();
-                if (key) {
-                    input.value = '••••••••••••••••'; // Masked
-                    input.disabled = true;
-                    saveBtn.style.display = 'none';
-                    clearBtn.style.display = 'block';
-                    status.textContent = '✓ API Key configured';
-                    status.style.color = 'var(--accent-stocks)';
-                } else {
-                    input.value = '';
-                    input.disabled = false;
-                    saveBtn.style.display = 'block';
-                    clearBtn.style.display = 'none';
-                    status.textContent = '';
-                }
-            };
+            // Load existing key
+            const existingKey = CMCAPIKeyManager.get();
+            if (existingKey) {
+                apiKeyInput.value = existingKey;
+            }
 
-            // Initial UI State
-            updateUI();
-
+            // Save API key
             saveBtn.addEventListener('click', async () => {
-                const key = input.value.trim();
-                if (!key) return;
+                const apiKey = apiKeyInput.value.trim();
 
-                status.textContent = 'Validating...';
-                status.style.color = 'var(--text-secondary)';
+                if (!apiKey) {
+                    ToastManager.warning('Please enter an API key');
+                    return;
+                }
 
-                const result = await APIKeyManager.validate(key);
+                statusDiv.style.display = 'block';
+                statusDiv.innerHTML = '<div class="loading"><span class="loading-dots">Validating</span></div>';
 
-                if (result.valid) {
-                    APIKeyManager.set(key);
-                    updateUI();
-                    ToastManager.success('API Key saved successfully!');
+                const validation = await CMCAPIKeyManager.validate(apiKey);
+
+                if (validation.valid) {
+                    CMCAPIKeyManager.set(apiKey);
+
+                    statusDiv.innerHTML = `
+                        <div style="padding: 12px; background: var(--profit-bg); 
+                            border: 1px solid var(--profit-border); border-radius: 8px; color: var(--profit-text);">
+                            ✓ API key saved! BTC test price: $${validation.testPrice.toLocaleString()}
+                        </div>
+                    `;
+
+                    ToastManager.success('API key saved!');
+
+                    // Auto-sync to Gist
+                    if (PortfolioApp.isAuthenticated()) {
+                        try {
+                            await PortfolioApp.syncToGist();
+                            ToastManager.success('Synced to cloud!');
+                        } catch (error) {
+                            console.warn('Sync failed:', error);
+                        }
+                    }
                 } else {
-                    status.textContent = '✗ ' + result.error;
-                    status.style.color = '#ff5050';
-                    ToastManager.error('Invalid API Key');
+                    statusDiv.innerHTML = `
+                        <div style="padding: 12px; background: var(--loss-bg); 
+                            border: 1px solid var(--loss-border); border-radius: 8px; color: var(--loss-text);">
+                            ✗ Invalid: ${validation.error}
+                        </div>
+                    `;
+
+                    ToastManager.error('Invalid API key');
                 }
             });
 
+            // Test connection
+            testBtn.addEventListener('click', async () => {
+                const apiKey = apiKeyInput.value.trim();
+
+                if (!apiKey) {
+                    ToastManager.warning('Enter API key first');
+                    return;
+                }
+
+                statusDiv.style.display = 'block';
+                statusDiv.innerHTML = '<div class="loading"><span class="loading-dots">Testing</span></div>';
+
+                const validation = await CMCAPIKeyManager.validate(apiKey);
+
+                if (validation.valid) {
+                    statusDiv.innerHTML = `
+                        <div style="padding: 12px; background: var(--profit-bg); 
+                            border: 1px solid var(--profit-border); border-radius: 8px; color: var(--profit-text);">
+                            ✓ Success! BTC: $${validation.testPrice.toLocaleString()}
+                        </div>
+                    `;
+                    ToastManager.success('Connection successful!');
+                } else {
+                    statusDiv.innerHTML = `
+                        <div style="padding: 12px; background: var(--loss-bg); 
+                            border: 1px solid var(--loss-border); border-radius: 8px; color: var(--loss-text);">
+                            ✗ Failed: ${validation.error}
+                        </div>
+                    `;
+                    ToastManager.error('Connection failed');
+                }
+            });
+
+            // Show/hide key
+            showBtn.addEventListener('click', () => {
+                const isPassword = apiKeyInput.type === 'password';
+                apiKeyInput.type = isPassword ? 'text' : 'password';
+                showBtn.textContent = isPassword ? '🙈 Hide' : '👁️ Show';
+            });
+
+            // Clear key
             clearBtn.addEventListener('click', () => {
-                if (confirm('Remove API Key? You will need to re-enter it to fetch prices.')) {
-                    APIKeyManager.clear();
-                    updateUI();
-                    ToastManager.info('API Key removed');
+                if (confirm('Clear API key?')) {
+                    CMCAPIKeyManager.clear();
+                    apiKeyInput.value = '';
+                    statusDiv.style.display = 'none';
+                    ToastManager.info('Cleared');
                 }
             });
         }
@@ -649,6 +744,7 @@
             const asset = {
                 name: document.getElementById('assetName').value.trim(),
                 symbol: document.getElementById('assetSymbol').value.trim().toUpperCase(),
+                coinmarketcapUCID: document.getElementById('coinmarketcapUCID').value.trim() || null,
                 manualPrice: document.getElementById('manualPrice').value || null,
                 buyPrice: document.getElementById('buyPrice').value || null,
                 purchaseDate: document.getElementById('purchaseDate').value || null,
@@ -684,6 +780,7 @@
             // Fill form
             document.getElementById('assetName').value = asset.name;
             document.getElementById('assetSymbol').value = asset.symbol || '';
+            document.getElementById('coinmarketcapUCID').value = asset.coinmarketcapUCID || '';
             document.getElementById('manualPrice').value = asset.manualPrice || '';
             document.getElementById('buyPrice').value = asset.buyPrice || '';
             document.getElementById('purchaseDate').value = asset.purchaseDate || '';

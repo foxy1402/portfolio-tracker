@@ -910,7 +910,7 @@
       if (!canvas) return;
 
       chartCanvas = canvas;
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
       chartCtx = ctx;
       const rect = canvas.parentElement.getBoundingClientRect();
 
@@ -983,36 +983,36 @@
       });
       ctx.stroke();
 
-      // Draw data points
-      points.forEach((p, i) => {
-        if (i === 0 || i === points.length - 1 || data.length <= 14) {
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
-          ctx.fillStyle = lineGradient; // Use same gradient for points
-          ctx.fill();
-          ctx.strokeStyle = 'var(--bg-primary)';
-          ctx.lineWidth = 2;
-          ctx.stroke();
-        }
-      });
-
       // Store points for tooltip
       canvas._chartPoints = points;
 
+      // Save the clean state (chart only, no crosshair)
+      canvas._baseImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      canvas._ctx = ctx; // Store context for reuse
+
       // Add mouse interaction
       canvas.onmousemove = (e) => handleChartHover(e, canvas, points);
-      canvas.onmouseleave = () => hideChartTooltip();
+      canvas.onmouseleave = () => hideChartTooltip(canvas);
+
+      // Touch interaction
+      canvas.ontouchstart = (e) => {
+        // Only prevent default if touching the chart area (allows scrolling elsewhere)
+        if (e.target === canvas) e.preventDefault();
+      };
+
       canvas.ontouchmove = (e) => {
-        e.preventDefault();
+        if (e.target === canvas) e.preventDefault();
         const touch = e.touches[0];
         handleChartHover({ clientX: touch.clientX, clientY: touch.clientY }, canvas, points);
       };
-      canvas.ontouchend = () => hideChartTooltip();
+
+      canvas.ontouchend = () => hideChartTooltip(canvas);
     }
 
     function handleChartHover(e, canvas, points) {
       const rect = canvas.getBoundingClientRect();
       const x = e.clientX - rect.left;
+      const ctx = canvas._ctx;
 
       // Find closest point
       let closest = points[0];
@@ -1025,6 +1025,36 @@
           closest = p;
         }
       });
+
+      // Restore base image (clears previous crosshair)
+      if (canvas._baseImage) {
+        ctx.putImageData(canvas._baseImage, 0, 0);
+      }
+
+      // Draw Crosshair (Vertical Line)
+      ctx.beginPath();
+      ctx.moveTo(closest.x, 20); // padding.top
+      ctx.lineTo(closest.x, canvas.height / window.devicePixelRatio - 25); // height - padding.bottom
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]); // Dashed line
+      ctx.stroke();
+      ctx.setLineDash([]); // Reset dash
+
+      // Draw Active Point (Outer Glow)
+      ctx.beginPath();
+      ctx.arc(closest.x, closest.y, 8, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(138, 43, 226, 0.2)';
+      ctx.fill();
+
+      // Draw Active Point (Inner Circle)
+      ctx.beginPath();
+      ctx.arc(closest.x, closest.y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff';
+      ctx.fill();
+      ctx.strokeStyle = '#8a2be2';
+      ctx.lineWidth = 2;
+      ctx.stroke();
 
       showChartTooltip(e.clientX, e.clientY, closest, canvas);
     }
@@ -1044,22 +1074,35 @@
 
       // Position tooltip
       const rect = canvas.parentElement.getBoundingClientRect();
-      let left = point.x + rect.left;
-      let top = point.y + rect.top - 50;
 
-      // Keep tooltip in bounds
+      // Calculate position relative to viewport, but anchored to point
+      let left = rect.left + point.x;
+      let top = rect.top + point.y - 50;
+
+      // Ensure tooltip doesn't go off screen
       const tooltipRect = tooltip.getBoundingClientRect();
-      if (left + 100 > window.innerWidth) left = left - 120;
-      if (top < 10) top = point.y + rect.top + 20;
+
+      // Horizontal bounds
+      if (left - tooltipRect.width / 2 < 10) left = 10 + tooltipRect.width / 2;
+      if (left + tooltipRect.width / 2 > window.innerWidth - 10) left = window.innerWidth - 10 - tooltipRect.width / 2;
+
+      // Vertical bounds (if too high, show below point)
+      if (top < 10) top = rect.top + point.y + 20;
 
       tooltip.style.left = left + 'px';
       tooltip.style.top = top + 'px';
+      tooltip.style.transform = 'translate(-50%, 0)'; // Center horizontally
       tooltip.classList.add('visible');
     }
 
-    function hideChartTooltip() {
+    function hideChartTooltip(canvas) {
       const tooltip = document.getElementById('chartTooltipFloating');
       if (tooltip) tooltip.classList.remove('visible');
+
+      // Restore clean chart
+      if (canvas && canvas._baseImage && canvas._ctx) {
+        canvas._ctx.putImageData(canvas._baseImage, 0, 0);
+      }
     }
 
     function drawMiniChart(data, canvasId) {
