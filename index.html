@@ -1294,8 +1294,12 @@
         },
         touchmove: null, // assigned below
         touchend: () => {
+          isTouching = false;
           clearTimeout(touchTimeout);
-          hideChartTooltip(canvas);
+          // Small delay before resetting to give user time to read final value
+          touchTimeout = setTimeout(() => {
+            hideChartTooltip(canvas);
+          }, 800);
         },
         touchcancel: () => {
           clearTimeout(touchTimeout);
@@ -1304,12 +1308,13 @@
       };
 
       let touchTimeout;
+
       handlers.touchmove = (e) => {
         if (e.target === canvas) e.preventDefault();
         const touch = e.touches[0];
         clearTimeout(touchTimeout);
         handleChartHover({ clientX: touch.clientX, clientY: touch.clientY }, canvas, points);
-        touchTimeout = setTimeout(() => hideChartTooltip(canvas), 150);
+        // Don't auto-hide while touching - stats stay frozen at scrub position
       };
 
       // Attach new listeners
@@ -1742,8 +1747,12 @@
         },
         touchmove: null, // assigned below
         touchend: () => {
+          isTouching = false;
           clearTimeout(touchTimeout);
-          hideChartTooltip(canvas);
+          // Small delay before resetting to give user time to read final value
+          touchTimeout = setTimeout(() => {
+            hideChartTooltip(canvas);
+          }, 800);
         },
         touchcancel: () => {
           clearTimeout(touchTimeout);
@@ -1752,12 +1761,14 @@
       };
 
       let touchTimeout;
+
       handlers.touchmove = (e) => {
         if (e.target === canvas) e.preventDefault();
         const touch = e.touches[0];
+        isTouching = true;
         clearTimeout(touchTimeout);
         handleChartHover({ clientX: touch.clientX, clientY: touch.clientY }, canvas, points);
-        touchTimeout = setTimeout(() => hideChartTooltip(canvas), 150);
+        // Don't auto-hide while touching - stats stay frozen at scrub position
       };
 
       // Attach new listeners

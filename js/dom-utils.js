@@ -360,7 +360,7 @@ const DOMUtils = {
       detailLines.push('Not included');
     }
 
-    detailsText.innerHTML = detailLines.join('<br>');
+    // Use safe DOM construction instead of innerHTML to prevent XSS\r\n    detailLines.forEach((line, index) => {\r\n      if (index > 0) {\r\n        detailsText.appendChild(document.createElement('br'));\r\n      }\r\n      detailsText.appendChild(document.createTextNode(line));\r\n    });
 
     details.appendChild(name);
     details.appendChild(detailsText);

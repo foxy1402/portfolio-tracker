@@ -691,11 +691,7 @@ const HistoryTracker = {
   }
 };
 
-// ============ CoinGecko Historical Price API ============
-// ============ OPTIMIZED Historical Price API with Aggressive Caching ============
-// This fixes rate limiting issues and prevents false stats
-
-// ============ CoinStats Historical Price API ============
+// ============ Historical Price API (CoinStats) ============
 const HistoricalPriceAPI = {
   CACHE_KEY: 'portfolio_historical_cache_v10', // Invalidate old cache for aggregation fix
   CACHE_DURATION: 24 * 60 * 60 * 1000,
@@ -1528,8 +1524,6 @@ const PortfolioApp = {
       throw new AppError('Not authenticated', 'AUTH_ERROR');
     }
 
-    // Verify migration ran
-    // this.performMigration(); // Removed per user request
     const assets = this.getAssets();
     const gistId = this.getGistId();
     const apiKey = CoinStatsAPIKeyManager.get(); // Changed
@@ -1946,8 +1940,6 @@ const PortfolioApp = {
 };
 
 window.PortfolioApp = PortfolioApp;
-window.HistoricalPriceAPI = HistoricalPriceAPI;
-window.PurchaseDatePerformance = PurchaseDatePerformance;
 
 // Auto pre-warm cache on page load (after 2 seconds)
 setTimeout(() => {
