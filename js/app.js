@@ -1690,7 +1690,7 @@ const PortfolioApp = {
     }
   },
 
-  // ============ CoinStats Price Fetching ============
+  // ============ CoinStats Price Fetching (OPTIMIZED - BUNDLE REQUESTS) ============
   async fetchMarketData(assets) {
     if (!assets || assets.length === 0) return {};
 
@@ -1705,16 +1705,23 @@ const PortfolioApp = {
         headers['X-API-KEY'] = apiKey;
       }
 
-      // Collect IDs
-      const ids = [...new Set(assets.filter(a => a.coinstatsId).map(a => a.coinstatsId))];
+      // ✅ OPTIMIZATION: Collect all unique coin IDs to bundle into 1 request
+      const coinIds = [...new Set(
+        assets
+          .filter(a => a.coinstatsId)
+          .map(a => a.coinstatsId)
+      )];
 
+      // ✅ Bundle all coins into a single API call
       let url;
-      if (ids.length > 0) {
-        // Fetch specific IDs
-        url = `${AppConfig.API.COINSTATS_BASE}/coins?currency=USD&coinIds=${ids.join(',')}`;
+      if (coinIds.length > 0) {
+        // Use coinIds parameter to fetch multiple coins at once
+        url = `${AppConfig.API.COINSTATS_BASE}/coins?currency=USD&coinIds=${coinIds.join(',')}`;
+        console.log(`📦 Bundled API request for ${coinIds.length} coins`);
       } else {
-        // Fallback: Fetch Top 100
+        // Fallback: Fetch Top 100 if no specific IDs
         url = `${AppConfig.API.COINSTATS_BASE}/coins?currency=USD&limit=100`;
+        console.log(`📦 Fetching top 100 coins (no specific IDs)`);
       }
 
       const response = await apiRateLimiter.execute(() => fetch(url, { headers }));
@@ -1750,6 +1757,8 @@ const PortfolioApp = {
           // Cache icon
           this._iconCache[coin.symbol.toUpperCase()] = coin.icon;
         });
+
+        console.log(`✅ Fetched ${data.result.length} coins in 1 API call`);
       }
 
       return result;

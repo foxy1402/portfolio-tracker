@@ -969,13 +969,15 @@
           if (navigator.vibrate) navigator.vibrate(50);
 
           try {
+            // ✅ Clear price cache to force fresh API call
+            CacheManager.clear();
+
+            // ✅ Fetch fresh data with new prices
             await initDashboard();
-            // Ensure UI update for specific assets if not covered by initDashboard
-            if (window.lastPortfolioData && typeof updatePortfolioDisplay === 'function') {
-              // updatePortfolioDisplay(window.lastPortfolioData);
-            }
-            ToastManager.success('Updated');
+
+            ToastManager.success('Prices updated!');
           } catch (err) {
+            console.error('Pull to refresh error:', err);
             ToastManager.error('Update failed');
           } finally {
             setTimeout(() => {
