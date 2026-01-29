@@ -1477,7 +1477,12 @@
 
       // Restore from window.currentViewStats which matches the active chart view
       if (window.currentViewStats) {
-        if (balanceEl) balanceEl.textContent = PortfolioApp.formatCurrency(window.currentViewStats.newest);
+        // Fix: Use live data for the main balance number if available
+        if (window.lastPortfolioData && balanceEl) {
+          balanceEl.textContent = PortfolioApp.formatCurrency(window.lastPortfolioData.grandTotal);
+        } else if (balanceEl) {
+          balanceEl.textContent = PortfolioApp.formatCurrency(window.currentViewStats.newest);
+        }
 
         const isPositive = window.currentViewStats.change >= 0;
         const sign = isPositive ? '+' : '';
@@ -1582,7 +1587,12 @@
 
       // Strategy: When updateHistoryChart runs, save the result to window.currentViewStats.
       if (window.currentViewStats) {
-        if (valueEl) valueEl.textContent = PortfolioApp.formatCurrency(window.currentViewStats.newest);
+        // Fix: Use live data for the main balance number if available
+        if (window.lastPortfolioData && valueEl) {
+          valueEl.textContent = PortfolioApp.formatCurrency(window.lastPortfolioData.grandTotal);
+        } else if (valueEl) {
+          valueEl.textContent = PortfolioApp.formatCurrency(window.currentViewStats.newest);
+        }
 
         const isPositive = window.currentViewStats.change >= 0;
         if (changeEl) changeEl.className = `performance-change ${isPositive ? 'positive' : 'negative'}`;
