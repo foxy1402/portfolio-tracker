@@ -1003,6 +1003,20 @@
       }
     }
 
+    // Auto-refresh on app visibility change (desktop & mobile)
+    function initAutoRefreshOnOpen() {
+      // Refresh when app becomes visible again (user returns to app/tab)
+      document.addEventListener('visibilitychange', async () => {
+        if (!document.hidden) {
+          // Clear cache to force fresh API call
+          CacheManager.clear();
+          console.log('App became visible - refreshing prices...');
+          await refreshData();
+          ToastManager.success('Prices updated!');
+        }
+      });
+    }
+
     // History Chart Functions
     // chartData is reused
 
@@ -1826,8 +1840,14 @@
       // initTabSystem() removed
       initBottomNav();
       initBottomNav();
+      
+      // Clear price cache to force fresh prices on app open (both desktop & mobile)
+      CacheManager.clear();
+      console.log('Clearing cache for fresh prices on app open');
+      
       initDashboard();
       initPullToRefresh(); // Initialize Pull to Refresh
+      initAutoRefreshOnOpen(); // Auto-refresh prices on app visibility change
 
       // Initialize history chart
       updateHistoryChart(7);
