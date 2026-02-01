@@ -188,19 +188,25 @@ const ErrorHandler = {
   }
 };
 
-// ============ Rate Limiter ============
-class RateLimiter {
-  constructor(maxRequests = 10, perMinute = 60000) {
-    this.maxRequests = maxRequests;
-    this.perMinute = perMinute;
-    this.queue = [];
+// ============ Smart Rate Limiter with Priority Queue ============
+class SmartRateLimiter {
+  constructor(maxRPS = 5) {
+    this.maxRPS = maxRPS; // Max requests per second
+    this.requestTimestamps = []; // Track request times
+    this.queue = []; // Priority queue: { fn, resolve, reject, priority }
     this.processing = false;
-    this.lastBatchTime = 0;
   }
 
-  async execute(fn) {
+  /**
+   * Execute function with priority (higher = more important)
+   * @param {Function} fn - Async function to execute
+   * @param {number} priority - Priority level (0-10, default 5)
+   */
+  async execute(fn, priority = 5) {
     return new Promise((resolve, reject) => {
-      this.queue.push({ fn, resolve, reject });
+      this.queue.push({ fn, resolve, reject, priority });
+      // Sort queue by priority (higher first)
+      this.queue.sort((a, b) => b.priority - a.priority);
       this.processQueue();
     });
   }
@@ -208,44 +214,60 @@ class RateLimiter {
   async processQueue() {
     if (this.processing || this.queue.length === 0) return;
 
-    const now = Date.now();
-    const timeSinceLastBatch = now - this.lastBatchTime;
-
-    if (timeSinceLastBatch < this.perMinute && this.lastBatchTime > 0) {
-      const waitTime = this.perMinute - timeSinceLastBatch;
-      setTimeout(() => this.processQueue(), waitTime);
-      return;
-    }
-
     this.processing = true;
-    this.lastBatchTime = now;
 
-    const batch = this.queue.splice(0, this.maxRequests);
+    while (this.queue.length > 0) {
+      // Clean up old timestamps (older than 1 second)
+      const now = Date.now();
+      this.requestTimestamps = this.requestTimestamps.filter(
+        timestamp => now - timestamp < 1000
+      );
 
-    const promises = batch.map(({ fn }) => fn());
-    const results = await Promise.allSettled(promises);
-
-    batch.forEach(({ resolve, reject }, i) => {
-      const result = results[i];
-      if (result.status === 'fulfilled') {
-        resolve(result.value);
-      } else {
-        reject(result.reason);
+      // Check if we can make more requests
+      if (this.requestTimestamps.length >= this.maxRPS) {
+        // Wait until the oldest request is 1 second old
+        const oldestRequest = Math.min(...this.requestTimestamps);
+        const waitTime = 1000 - (now - oldestRequest) + 50; // Add 50ms buffer
+        
+        console.log(`⏳ Rate limit: waiting ${waitTime}ms (${this.requestTimestamps.length}/${this.maxRPS} RPS)`);
+        
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        continue;
       }
-    });
+
+      // Process next request
+      const { fn, resolve, reject } = this.queue.shift();
+      this.requestTimestamps.push(Date.now());
+
+      try {
+        const result = await fn();
+        resolve(result);
+      } catch (error) {
+        reject(error);
+      }
+
+      // Small delay between requests to avoid bursting
+      if (this.queue.length > 0) {
+        await new Promise(resolve => setTimeout(resolve, 220)); // ~4.5 RPS safe rate
+      }
+    }
 
     this.processing = false;
+  }
 
-    if (this.queue.length > 0) {
-      setTimeout(() => this.processQueue(), 100);
-    }
+  /**
+   * Get queue status
+   */
+  getStatus() {
+    return {
+      queueLength: this.queue.length,
+      currentRPS: this.requestTimestamps.length,
+      maxRPS: this.maxRPS
+    };
   }
 }
 
-const apiRateLimiter = new RateLimiter(
-  AppConfig.API.RATE_LIMIT.MAX_REQUESTS,
-  AppConfig.API.RATE_LIMIT.PER_MINUTE
-);
+const apiRateLimiter = new SmartRateLimiter(4); // Conservative 4 RPS (CoinStats allows 5)
 
 // ============ Backup Manager ============
 const BackupManager = {
@@ -824,7 +846,7 @@ const HistoricalPriceAPI = {
 
   // Helper to allow cleaner reading (dummy wrapper, actual logic below)
   async fetchHistoricalPrices_impl(coinId, days, options = {}) {
-    const { signal } = options;
+    const { signal, priority = 5 } = options; // Default priority 5
     const cacheKey = `${coinId}_${days}`;
     const cache = this.getCache();
 
@@ -833,10 +855,10 @@ const HistoricalPriceAPI = {
       return cache[cacheKey].data;
     }
 
-    console.log(`⚠ Cache miss: ${coinId} (${days} days) - fetching...`);
+    console.log(`⚠ Cache miss: ${coinId} (${days} days) - fetching with priority ${priority}...`);
 
     try {
-      // Use centralized rate limiter
+      // Use centralized rate limiter with priority
       return apiRateLimiter.execute(async () => {
         // ... (headers prep)
         const apiKey = CoinStatsAPIKeyManager.get();
@@ -892,7 +914,7 @@ const HistoricalPriceAPI = {
         this.setCache(cacheKey, finalHistory);
 
         return finalHistory;
-      });
+      }, priority); // Pass priority to rate limiter
     } catch (error) {
       console.error(`Failed to fetch ${coinId}:`, error);
 
@@ -949,10 +971,10 @@ const HistoricalPriceAPI = {
   },
 
   /**
-   * Batch fetch with delays
+   * Batch fetch with smart queue management
    */
   async batchFetchHistoricalPrices(assets, days, options = {}) {
-    const { signal } = options;
+    const { signal, priority = 5 } = options;
     const cache = this.getCache();
     const results = {};
     const toFetch = [];
@@ -973,14 +995,14 @@ const HistoricalPriceAPI = {
       }
     });
 
-    console.log(`📊 Cache: ${Object.keys(results).length} hits, ${toFetch.length} misses`);
+    console.log(`📊 Cache: ${Object.keys(results).length} hits, ${toFetch.length} misses (priority ${priority})`);
 
-    // Fetch missing data concurrently (managed by RateLimiter)
+    // Fetch missing data with priority (queued by SmartRateLimiter)
     await Promise.all(toFetch.map(async (asset) => {
       const identifier = asset.coinstatsId || asset.symbol.toLowerCase();
 
       try {
-        const priceHistory = await this.fetchHistoricalPrices(identifier, days, options);
+        const priceHistory = await this.fetchHistoricalPrices(identifier, days, { signal, priority });
 
         results[asset.id] = {
           asset,
@@ -1066,9 +1088,9 @@ const HistoricalPriceAPI = {
    */
   async calculatePerformance(days = 30, options = {}) {
     // Try purchase date performance first
-    const { signal } = options;
+    const { signal, priority = 8 } = options;
     try {
-      const accuratePerf = await PurchaseDatePerformance.calculateStats(days, { signal });
+      const accuratePerf = await PurchaseDatePerformance.calculateStats(days, { signal, priority });
       if (accuratePerf && accuratePerf.dataPoints >= 2) {
         return accuratePerf;
       }
@@ -1149,13 +1171,22 @@ const HistoricalPriceAPI = {
 
     if (trackedAssets.length === 0) return;
 
-    console.log('🔥 Pre-warming cache...');
-    const periods = [7, 30];
-
+    console.log('🔥 Pre-warming cache in background (low priority)...');
+    
+    // Only prewarm most commonly used timeframes
+    const periods = [7, 30]; // 1W and 1M are most used
+    
+    // Use low priority (0) for background pre-warming
     for (const days of periods) {
-      await this.batchFetchHistoricalPrices(trackedAssets, days);
+      // Fetch sequentially to avoid overwhelming the queue
+      await this.batchFetchHistoricalPrices(trackedAssets, days, { priority: 0 })
+        .catch(err => console.warn(`Pre-warm failed for ${days}d:`, err));
+      
+      // Delay between periods to be nice to the API
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
-
+    
+    console.log('✓ Cache pre-warming completed');
   }
 };
 
@@ -1168,7 +1199,7 @@ const PurchaseDatePerformance = {
    * Calculate accurate performance with batch loading
    */
   async calculateAccuratePerformance(days = 30, options = {}) {
-    const { signal } = options;
+    const { signal, priority = 8 } = options; // User-initiated requests get high priority
     const assets = PortfolioApp.getAssets();
 
     const trackedAssets = assets.filter(a =>
@@ -1198,11 +1229,11 @@ const PurchaseDatePerformance = {
 
     const totalDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
 
-    // Use batch fetch from HistoricalPriceAPI
+    // Use batch fetch from HistoricalPriceAPI with high priority
     const priceResults = await HistoricalPriceAPI.batchFetchHistoricalPrices(
       trackedAssets,
       totalDays,
-      { signal }
+      { signal, priority } // Pass priority through
     );
 
     // Process each asset
@@ -1739,7 +1770,7 @@ const PortfolioApp = {
         console.log(`📦 Fetching top 100 coins (no specific IDs)`);
       }
 
-      const response = await apiRateLimiter.execute(() => fetch(url, { headers }));
+      const response = await apiRateLimiter.execute(() => fetch(url, { headers }), 10); // Highest priority for current prices
 
       if (!response.ok) {
         throw new Error(`CoinStats API error: ${response.status}`);

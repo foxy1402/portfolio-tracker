@@ -1005,16 +1005,51 @@
 
     // Auto-refresh on app visibility change (desktop & mobile)
     function initAutoRefreshOnOpen() {
+      let lastRefreshTime = Date.now();
+      const MIN_REFRESH_INTERVAL = 3000; // Prevent refresh spam (3 seconds)
+
+      async function doRefresh(source) {
+        const now = Date.now();
+        if (now - lastRefreshTime < MIN_REFRESH_INTERVAL) {
+          console.log(`Skipping refresh (${source}) - too soon since last refresh`);
+          return;
+        }
+        
+        lastRefreshTime = now;
+        CacheManager.clear();
+        console.log(`${source} - refreshing prices...`);
+        await refreshData();
+        ToastManager.success('Prices updated!');
+      }
+
       // Refresh when app becomes visible again (user returns to app/tab)
       document.addEventListener('visibilitychange', async () => {
         if (!document.hidden) {
-          // Clear cache to force fresh API call
-          CacheManager.clear();
-          console.log('App became visible - refreshing prices...');
-          await refreshData();
-          ToastManager.success('Prices updated!');
+          await doRefresh('Visibility change');
         }
       });
+
+      // PWA-specific: Refresh when app is launched from home screen
+      // Check if running as PWA (standalone mode)
+      const isPWA = window.matchMedia('(display-mode: standalone)').matches || 
+                    window.navigator.standalone === true;
+      
+      if (isPWA) {
+        console.log('Running as PWA - enhanced refresh enabled');
+        
+        // pageshow event fires every time the page is displayed (including from cache)
+        window.addEventListener('pageshow', async (event) => {
+          // Only refresh if page was restored from bfcache OR it's a persisted page
+          if (event.persisted) {
+            await doRefresh('PWA pageshow (from cache)');
+          }
+        });
+
+        // Also listen for focus events (when user returns to PWA)
+        window.addEventListener('focus', async () => {
+          await doRefresh('PWA focus');
+        });
+      }
     }
 
     // History Chart Functions
@@ -1055,6 +1090,12 @@
       const historyEmpty = document.getElementById('historyEmpty');
       const chartStats = document.getElementById('chartStats');
       const mobileLoading = document.getElementById('mobileChartLoading');
+      
+      // Show queue status if requests are pending
+      const queueStatus = apiRateLimiter.getStatus();
+      if (queueStatus.queueLength > 0) {
+        console.log(`📊 API Queue: ${queueStatus.queueLength} pending, ${queueStatus.currentRPS}/${queueStatus.maxRPS} RPS`);
+      }
 
       if (historyEmpty) {
         historyEmpty.innerHTML = `
@@ -1076,9 +1117,10 @@
       const apiDays = days === 0 ? 'max' : days;
 
       try {
-        // Fetch performance data with signal
+        // Fetch performance data with signal and high priority (user-initiated)
         const performance = await HistoricalPriceAPI.calculatePerformance(apiDays, {
-          signal: currentChartController.signal
+          signal: currentChartController.signal,
+          priority: 9 // High priority for visible chart
         });
 
         // ✅ Hide mobile loading on success

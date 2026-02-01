@@ -68,7 +68,10 @@ self.addEventListener('fetch', (event) => {
 // Network first with cache fallback (for APIs)
 async function networkFirstWithCache(request) {
     try {
-        const networkResponse = await fetch(request);
+        // Always try network first for API calls to ensure fresh data
+        const networkResponse = await fetch(request, {
+            cache: 'no-cache' // Force network request, bypass browser cache
+        });
 
         if (networkResponse.ok) {
             const cache = await caches.open(API_CACHE_NAME);
@@ -80,6 +83,7 @@ async function networkFirstWithCache(request) {
     } catch (error) {
         const cachedResponse = await caches.match(request);
         if (cachedResponse) {
+            console.log('Using cached API response (offline):', request.url);
             return cachedResponse;
         }
         throw error;
