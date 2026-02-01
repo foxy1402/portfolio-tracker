@@ -709,7 +709,23 @@ const HistoricalPriceAPI = {
 
       Object.keys(parsed).forEach(key => {
         const entry = parsed[key];
-        if (entry.timestamp && (now - entry.timestamp < this.CACHE_DURATION)) {
+        if (!entry.timestamp) return;
+        
+        // Different cache durations based on period
+        // Extract period from cache key (format: "coinid_days")
+        const parts = key.split('_');
+        const days = parts[parts.length - 1];
+        
+        let maxAge;
+        if (days === '1' || days === '24h') {
+          maxAge = 5 * 60 * 1000; // 5 minutes for 24H view
+        } else if (days === '7' || days === '1w') {
+          maxAge = 30 * 60 * 1000; // 30 minutes for 1W view
+        } else {
+          maxAge = this.CACHE_DURATION; // 24 hours for longer periods
+        }
+        
+        if (now - entry.timestamp < maxAge) {
           valid[key] = entry;
         }
       });
@@ -1208,9 +1224,14 @@ const PurchaseDatePerformance = {
 
       const relevantPrices = result.priceHistory.filter(point => {
         const pointDate = new Date(point.date);
+        const now = new Date();
 
         // Always filter future dates (sanity check)
-        if (pointDate > new Date()) return false;
+        if (pointDate > now) return false;
+
+        // CRITICAL: Filter data points outside the requested timeframe
+        // This prevents showing stale cached data (e.g., Jan 28-29 when requesting Feb 1 data)
+        if (pointDate < startDate) return false;
 
         if (isLongTerm) {
           // Strict filtering for long-term: only show post-purchase

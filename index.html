@@ -1143,19 +1143,8 @@
           perfChangeValue.textContent = `${isPositive ? '+' : ''}${performance.changePercent.toFixed(1)}%`;
         }
 
-        // Update Mobile Hero PnL (Dynamic based on timeframe)
-        const heroPnlBadge = document.getElementById('heroPnlBadge');
-        const heroPnlAmount = document.getElementById('heroPnlAmount');
-        const heroPnlPercent = document.getElementById('heroPnlPercent');
-
-        if (heroPnlBadge && heroPnlAmount && heroPnlPercent) {
-          const sign = isPositive ? '+' : '';
-          heroPnlBadge.className = `mobile-pnl-badge ${isPositive ? 'positive' : 'negative'}`;
-          heroPnlPercent.textContent = `${isPositive ? '↑' : '↓'} ${sign}${performance.changePercent.toFixed(1)}%`;
-          // Show "24H", "7D" etc badge next to amount to verify context? No, just amount is fine per design.
-          heroPnlAmount.textContent = `${sign}${PortfolioApp.formatCurrency(performance.change)}`;
-          heroPnlAmount.className = `mobile-pnl-amount ${isPositive ? 'positive' : 'negative'}`;
-        }
+        // NOTE: Mobile Hero PnL now shows TOTAL P/L (from cost basis) not timeframe-based
+        // It's updated in updateUI() function to match desktop totalProfitValue behavior
 
         // Draw charts
         drawEnhancedLineChart(performance.history, 'historyChart');
