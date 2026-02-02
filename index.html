@@ -1005,7 +1005,7 @@
 
     // Auto-refresh on app visibility change (desktop & mobile)
     function initAutoRefreshOnOpen() {
-      let lastRefreshTime = Date.now();
+      let lastRefreshTime = 0; // Start at 0 to allow immediate first refresh
       const MIN_REFRESH_INTERVAL = 3000; // Prevent refresh spam (3 seconds)
 
       async function doRefresh(source) {
@@ -1037,9 +1037,12 @@
       if (isPWA) {
         console.log('Running as PWA - enhanced refresh enabled');
         
+        // Force immediate refresh on PWA launch
+        setTimeout(() => doRefresh('PWA launch'), 100);
+        
         // pageshow event fires every time the page is displayed (including from cache)
         window.addEventListener('pageshow', async (event) => {
-          // Only refresh if page was restored from bfcache OR it's a persisted page
+          // Refresh if page was restored from bfcache
           if (event.persisted) {
             await doRefresh('PWA pageshow (from cache)');
           }
