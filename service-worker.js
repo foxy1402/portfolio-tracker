@@ -1,5 +1,5 @@
 // Portfolio Tracker - Enhanced Service Worker
-const CACHE_NAME = 'portfolio-v2';
+const CACHE_NAME = 'portfolio-v4';
 const API_CACHE_NAME = 'portfolio-api-v1';
 const API_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
@@ -11,6 +11,11 @@ const STATIC_ASSETS = [
     './css/style.css',
     './js/app.js',
     './js/chart.js',
+    './js/dom-utils.js',
+    './js/router.js',
+    './js/dashboard.js',
+    './js/admin.js',
+    './js/rebalance.js',
     './manifest.json',
     './images/icon-192.png',
     './images/icon-512.png'
@@ -47,7 +52,7 @@ self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
 
     // API requests: Network first with cache fallback
-    if (url.hostname.includes('api.coingecko.com') ||
+    if (url.hostname.includes('openapiv1.coinstats.app') ||
         url.hostname.includes('api.exchangerate-api.com') ||
         url.hostname.includes('api.github.com')) {
         event.respondWith(networkFirstWithCache(event.request));
@@ -58,6 +63,17 @@ self.addEventListener('fetch', (event) => {
     if (url.hostname.includes('fonts.googleapis.com') ||
         url.hostname.includes('fonts.gstatic.com')) {
         event.respondWith(cacheFirst(event.request));
+        return;
+    }
+
+    // Scripts and markup: network first so deploys show up on the next load
+    if (
+        url.pathname.endsWith('.js') ||
+        url.pathname.endsWith('.css') ||
+        url.pathname.endsWith('.html') ||
+        url.pathname.endsWith('/')
+    ) {
+        event.respondWith(networkFirstStatic(event.request));
         return;
     }
 
@@ -86,6 +102,21 @@ async function networkFirstWithCache(request) {
             console.log('Using cached API response (offline):', request.url);
             return cachedResponse;
         }
+        throw error;
+    }
+}
+
+async function networkFirstStatic(request) {
+    try {
+        const networkResponse = await fetch(request);
+        if (networkResponse.ok) {
+            const cache = await caches.open(CACHE_NAME);
+            cache.put(request, networkResponse.clone());
+        }
+        return networkResponse;
+    } catch (error) {
+        const cachedResponse = await caches.match(request);
+        if (cachedResponse) return cachedResponse;
         throw error;
     }
 }

@@ -94,8 +94,8 @@ const DOMUtils = {
 
     // Row 2: Total Value
     const bottomRow = this.createElement('div', {
-      text: PortfolioApp.formatCurrency(asset.value),
-      styles: { fontWeight: '500', fontSize: '0.95rem', color: 'var(--text-muted)' }
+      text: asset.priceMissing ? 'No live price' : PortfolioApp.formatCurrency(asset.value),
+      styles: { fontWeight: '500', fontSize: '0.95rem', color: asset.priceMissing ? 'var(--loss-text)' : 'var(--text-muted)' }
     });
 
     leftCol.appendChild(topRow);
@@ -151,7 +151,7 @@ const DOMUtils = {
       });
 
       const price = this.createElement('div', {
-        text: PortfolioApp.formatCurrency(asset.currentPrice),
+        text: asset.priceMissing ? '—' : PortfolioApp.formatCurrency(asset.currentPrice),
         styles: { fontWeight: '600', fontSize: '1rem', color: 'var(--text-primary)' }
       });
 
@@ -175,7 +175,11 @@ const DOMUtils = {
       const img = this.createElement('img', {
         attributes: {
           src: asset.iconUrl,
-          alt: asset.symbol || asset.name
+          alt: asset.symbol || asset.name || '',
+          loading: 'lazy',
+          decoding: 'async',
+          width: '36',
+          height: '36'
         },
         className: 'asset-icon-img'
       });
@@ -360,7 +364,12 @@ const DOMUtils = {
       detailLines.push('Not included');
     }
 
-    // Use safe DOM construction instead of innerHTML to prevent XSS\r\n    detailLines.forEach((line, index) => {\r\n      if (index > 0) {\r\n        detailsText.appendChild(document.createElement('br'));\r\n      }\r\n      detailsText.appendChild(document.createTextNode(line));\r\n    });
+    detailLines.forEach((line, index) => {
+      if (index > 0) {
+        detailsText.appendChild(document.createElement('br'));
+      }
+      detailsText.appendChild(document.createTextNode(line));
+    });
 
     details.appendChild(name);
     details.appendChild(detailsText);

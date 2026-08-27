@@ -41,25 +41,27 @@ const AppConfig = {
 const CoinStatsAPIKeyManager = {
   STORAGE_KEY: AppConfig.STORAGE.API_KEY,
 
-  // Get API key (optional for CoinStats)
+  // Get API key (optional for CoinStats). Stored locally, obfuscated with base64 — not encryption.
   get() {
     try {
-      const encrypted = localStorage.getItem(this.STORAGE_KEY);
-      if (!encrypted) return null;
-      return atob(encrypted);
+      const stored = localStorage.getItem(this.STORAGE_KEY);
+      if (!stored) return null;
+      try {
+        return atob(stored);
+      } catch {
+        return stored;
+      }
     } catch {
       return null;
     }
   },
 
-  // Save API key
   set(apiKey) {
     if (!apiKey) {
       localStorage.removeItem(this.STORAGE_KEY);
       return;
     }
-    const encrypted = btoa(apiKey);
-    localStorage.setItem(this.STORAGE_KEY, encrypted);
+    localStorage.setItem(this.STORAGE_KEY, btoa(apiKey));
   },
 
   // Check if configured
@@ -127,6 +129,29 @@ const Utils = {
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
+  },
+
+  parseLocalDate(dateStr) {
+    if (!dateStr) return null;
+    if (dateStr instanceof Date) {
+      return Number.isNaN(dateStr.getTime()) ? null : dateStr;
+    }
+    const datePart = String(dateStr).split('T')[0];
+    const parts = datePart.split('-').map(Number);
+    if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) {
+      const fallback = new Date(dateStr);
+      return Number.isNaN(fallback.getTime()) ? null : fallback;
+    }
+    return new Date(parts[0], parts[1] - 1, parts[2]);
+  },
+
+  localDateKey(date = new Date()) {
+    const d = date instanceof Date ? date : this.parseLocalDate(date);
+    if (!d || Number.isNaN(d.getTime())) return '';
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
   },
 
   /**
@@ -409,7 +434,7 @@ const ThemeManager = {
   init() {
     const saved = localStorage.getItem(this.STORAGE_KEY);
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const theme = saved || (prefersDark ? 'dark' : 'dark');
+    const theme = saved || (prefersDark ? 'dark' : 'light');
     this.apply(theme);
 
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
@@ -671,7 +696,7 @@ const HistoryTracker = {
   record(totalValue, categoryValues) {
     try {
       const history = this.getAll();
-      const today = new Date().toISOString().split('T')[0];
+      const today = Utils.localDateKey();
 
       const existingIndex = history.findIndex(h => h.date === today);
 
@@ -901,7 +926,7 @@ const HistoricalPriceAPI = {
         const transformed = data.map(point => {
           const timestampMs = point[0] * 1000;
           return {
-            date: new Date(timestampMs).toISOString().split('T')[0],
+            date: Utils.localDateKey(new Date(timestampMs)),
             timestamp: timestampMs,
             price: point[1]
           };
@@ -916,58 +941,12 @@ const HistoricalPriceAPI = {
         return finalHistory;
       }, priority); // Pass priority to rate limiter
     } catch (error) {
-      console.error(`Failed to fetch ${coinId}:`, error);
-
-      // Fallback: Use current price
-      try {
-        return await this.createFallbackHistory(coinId, days);
-      } catch {
-        return [];
+      if (error?.name === 'AbortError' || options.signal?.aborted) {
+        throw error;
       }
+      console.error(`Failed to fetch ${coinId}:`, error);
+      return [];
     }
-  },
-
-  /**
-   * Create fallback history using current price
-   */
-  async createFallbackHistory(coinId, days) {
-    const apiKey = CoinStatsAPIKeyManager.get();
-    const headers = { 'Accept': 'application/json' };
-
-    if (apiKey) {
-      headers['X-API-KEY'] = apiKey;
-    }
-
-    const response = await fetch(
-      `${AppConfig.API.COINSTATS_BASE}/coins/${coinId}`,
-      { headers }
-    );
-
-    if (!response.ok) return [];
-
-    const data = await response.json();
-    const currentPrice = data.price;
-
-    if (!currentPrice) return [];
-
-    // Generate synthetic history
-    const history = [];
-    const now = Date.now();
-    const numDays = days === 'max' || days === 0 ? 365 : days;
-
-    for (let i = numDays; i >= 0; i--) {
-      const timestamp = now - (i * 24 * 60 * 60 * 1000);
-      const variance = (Math.random() - 0.5) * 0.02;
-      const price = currentPrice * (1 + variance);
-
-      history.push({
-        date: new Date(timestamp).toISOString().split('T')[0],
-        timestamp,
-        price
-      });
-    }
-
-    return history;
   },
 
   /**
@@ -981,7 +960,7 @@ const HistoricalPriceAPI = {
 
     // Separate cached vs uncached
     assets.forEach(asset => {
-      const identifier = asset.coinstatsId || asset.symbol.toLowerCase();
+      const identifier = PortfolioApp.resolveCoinId(asset);
       const cacheKey = `${identifier}_${days}`;
 
       if (cache[cacheKey]) {
@@ -999,7 +978,7 @@ const HistoricalPriceAPI = {
 
     // Fetch missing data with priority (queued by SmartRateLimiter)
     await Promise.all(toFetch.map(async (asset) => {
-      const identifier = asset.coinstatsId || asset.symbol.toLowerCase();
+      const identifier = PortfolioApp.resolveCoinId(asset);
 
       try {
         const priceHistory = await this.fetchHistoricalPrices(identifier, days, { signal, priority });
@@ -1010,6 +989,9 @@ const HistoricalPriceAPI = {
           fromCache: false
         };
       } catch (error) {
+        if (error?.name === 'AbortError' || signal?.aborted) {
+          throw error;
+        }
         console.error(`Failed to fetch ${asset.name}:`, error);
         results[asset.id] = {
           asset,
@@ -1046,8 +1028,12 @@ const HistoricalPriceAPI = {
       }
 
       const balance = parseFloat(asset.balance || 0);
+      const lastByDate = {};
+      priceHistory.forEach((point) => {
+        lastByDate[point.date] = point;
+      });
 
-      priceHistory.forEach(({ date, timestamp, price }) => {
+      Object.values(lastByDate).forEach(({ date, timestamp, price }) => {
         if (!portfolioByDate[date]) {
           portfolioByDate[date] = {
             date,
@@ -1061,9 +1047,19 @@ const HistoricalPriceAPI = {
           };
         }
 
+        const existing = portfolioByDate[date].breakdown[asset.id];
+        if (existing) {
+          portfolioByDate[date].total -= existing.value;
+          if (portfolioByDate[date][asset.category] != null) {
+            portfolioByDate[date][asset.category] -= existing.value;
+          }
+        }
+
         const value = price * balance;
         portfolioByDate[date].total += value;
-        portfolioByDate[date][asset.category] += value;
+        if (portfolioByDate[date][asset.category] != null) {
+          portfolioByDate[date][asset.category] += value;
+        }
         portfolioByDate[date].breakdown[asset.id] = {
           value,
           price,
@@ -1105,14 +1101,15 @@ const HistoricalPriceAPI = {
     );
 
     if (localHistory.length >= 2) {
+      const newest = localHistory[localHistory.length - 1].total;
+      const firstActive = localHistory.find((h) => h.total > 0) || localHistory[0];
+      const baseline = firstActive.total > 0 ? firstActive.total : localHistory[0].total;
       const values = localHistory.map(h => h.total);
       return {
         oldest: localHistory[0].total,
-        newest: localHistory[localHistory.length - 1].total,
-        change: localHistory[localHistory.length - 1].total - localHistory[0].total,
-        changePercent: localHistory[0].total > 0
-          ? ((localHistory[localHistory.length - 1].total - localHistory[0].total) / localHistory[0].total * 100)
-          : 0,
+        newest,
+        change: newest - baseline,
+        changePercent: baseline > 0 ? ((newest - baseline) / baseline * 100) : 0,
         high: Math.max(...values),
         low: Math.min(...values),
         avg: values.reduce((a, b) => a + b, 0) / values.length,
@@ -1132,13 +1129,15 @@ const HistoricalPriceAPI = {
 
     const oldest = history[0].total;
     const newest = history[history.length - 1].total;
+    const firstActive = history.find((h) => h.total > 0) || history[0];
+    const baseline = firstActive.total > 0 ? firstActive.total : oldest;
     const values = history.map(h => h.total);
 
     return {
       oldest,
       newest,
-      change: newest - oldest,
-      changePercent: oldest > 0 ? ((newest - oldest) / oldest * 100) : 0,
+      change: newest - baseline,
+      changePercent: baseline > 0 ? ((newest - baseline) / baseline * 100) : 0,
       high: Math.max(...values),
       low: Math.min(...values),
       avg: values.reduce((a, b) => a + b, 0) / values.length,
@@ -1219,7 +1218,7 @@ const PurchaseDatePerformance = {
 
     if (days === 'max' || days === 0) {
       const earliestPurchase = trackedAssets.reduce((earliest, asset) => {
-        const purchaseDate = new Date(asset.purchaseDate);
+        const purchaseDate = Utils.parseLocalDate(asset.purchaseDate) || new Date();
         return purchaseDate < earliest ? purchaseDate : earliest;
       }, new Date());
       startDate.setTime(earliestPurchase.getTime());
@@ -1245,7 +1244,7 @@ const PurchaseDatePerformance = {
         return { asset, priceHistory: [], balance: 0, purchaseDate: asset.purchaseDate };
       }
 
-      const purchaseDate = new Date(asset.purchaseDate);
+      const purchaseDate = Utils.parseLocalDate(asset.purchaseDate) || new Date();
       const balance = parseFloat(asset.balance || 0);
 
       // Filter logic:
@@ -1254,33 +1253,21 @@ const PurchaseDatePerformance = {
       const isLongTerm = days > 7 || days === 'max' || days === 0;
 
       const relevantPrices = result.priceHistory.filter(point => {
-        const pointDate = new Date(point.date);
+        const pointDate = Utils.parseLocalDate(point.date) || new Date(point.timestamp);
         const now = new Date();
 
-        // Always filter future dates (sanity check)
         if (pointDate > now) return false;
-
-        // CRITICAL: Filter data points outside the requested timeframe
-        // This prevents showing stale cached data (e.g., Jan 28-29 when requesting Feb 1 data)
         if (pointDate < startDate) return false;
 
         if (isLongTerm) {
-          // Strict filtering for long-term: only show post-purchase
           return pointDate >= purchaseDate;
-        } else {
-          // Loose filtering for short-term: keep context
-          return true;
         }
+        return true;
       });
 
-      // Add purchase price if available
-      const purchaseDateStr = purchaseDate.toISOString().split('T')[0];
+      const purchaseDateStr = Utils.localDateKey(purchaseDate);
       const hasPurchasePoint = relevantPrices.some(p => p.date === purchaseDateStr);
 
-      // Only inject purchase date if:
-      // 1. It's missing
-      // 2. AND (We are in 'ALL' mode OR the purchase date is within the requested window)
-      // This prevents "24H" view from showing a point from weeks ago
       const isWithinWindow = (days === 'max' || days === 0) || (purchaseDate >= startDate);
 
       if (!hasPurchasePoint && asset.buyPrice && isWithinWindow) {
@@ -1351,7 +1338,7 @@ const PurchaseDatePerformance = {
 
         if (!portfolioByDate[effectiveKey]) {
           portfolioByDate[effectiveKey] = {
-            date: new Date(bucketTimestamp).toISOString().split('T')[0],
+            date: Utils.localDateKey(new Date(bucketTimestamp)),
             timestamp: bucketTimestamp,
             total: 0,
             crypto: 0,
@@ -1399,10 +1386,12 @@ const PurchaseDatePerformance = {
       return null;
     }
 
-    const oldest = history[0].total;
     const newest = history[history.length - 1].total;
-    const change = newest - oldest;
-    const changePercent = oldest > 0 ? (change / oldest) * 100 : 0;
+    const firstActive = history.find((h) => h.total > 0) || history[0];
+    const baseline = firstActive.total > 0 ? firstActive.total : history[0].total;
+    const oldest = history[0].total;
+    const change = newest - baseline;
+    const changePercent = baseline > 0 ? (change / baseline) * 100 : 0;
 
     const values = history.map(h => h.total);
     const high = Math.max(...values);
@@ -1425,7 +1414,8 @@ const PurchaseDatePerformance = {
       dataPoints: history.length,
       history,
       isAccurate: true,
-      isHypothetical: false
+      isHypothetical: false,
+      incomplete: history.some((h) => !h.isAccurate)
     };
   }
 };
@@ -1456,6 +1446,8 @@ const PortfolioApp = {
   _assetsCache: null,
   _cacheInvalidated: false,
   _iconCache: {},
+  _coinIdCache: {},
+  _lastMarketFetchOk: true,
 
   // ============ Authentication ============
   isAuthenticated() {
@@ -1529,7 +1521,9 @@ const PortfolioApp = {
       BackupManager.createBackup('before_add');
 
       const assets = this.getAssets();
-      asset.id = Date.now().toString();
+      asset.id = (typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
       assets.push(asset);
       this.saveAssets(assets);
 
@@ -1737,80 +1731,120 @@ const PortfolioApp = {
   },
 
   // ============ CoinStats Price Fetching (OPTIMIZED - BUNDLE REQUESTS) ============
+  _coinstatsHeaders() {
+    const headers = { 'Accept': 'application/json' };
+    const apiKey = CoinStatsAPIKeyManager.get();
+    if (apiKey) headers['X-API-KEY'] = apiKey;
+    return headers;
+  },
+
+  _ingestCoins(result, coins) {
+    if (!Array.isArray(coins)) return;
+    coins.forEach((coin) => {
+      if (!coin) return;
+      const symbol = (coin.symbol || '').toUpperCase();
+      if (!symbol && !coin.id) return;
+      const priceData = {
+        usd: coin.price,
+        image: coin.icon,
+        id: coin.id,
+        rank: coin.rank,
+        change1h: coin.priceChange1h,
+        change1d: coin.priceChange1d,
+        change1w: coin.priceChange1w,
+        volume: coin.volume,
+        marketCap: coin.marketCap
+      };
+      result[symbol || coin.id] = priceData;
+      if (coin.id) result[coin.id] = priceData;
+      if (symbol) {
+        this._iconCache[symbol] = coin.icon;
+        if (coin.id) this._coinIdCache[symbol] = coin.id;
+      }
+    });
+  },
+
+  resolveCoinId(asset) {
+    if (asset?.coinstatsId) return asset.coinstatsId;
+    const symbol = asset?.symbol?.toUpperCase();
+    if (symbol && this._coinIdCache[symbol]) return this._coinIdCache[symbol];
+    return asset?.symbol ? asset.symbol.toLowerCase() : '';
+  },
+
   async fetchMarketData(assets) {
     if (!assets || assets.length === 0) return {};
 
-    try {
-      const apiKey = CoinStatsAPIKeyManager.get();
-      const headers = {
-        'Accept': 'application/json'
-      };
+    this._lastMarketFetchOk = true;
 
-      // Optional: Add API key for higher rate limits
-      if (apiKey) {
-        headers['X-API-KEY'] = apiKey;
-      }
-
-      // ✅ OPTIMIZATION: Collect all unique coin IDs to bundle into 1 request
-      const coinIds = [...new Set(
-        assets
-          .filter(a => a.coinstatsId)
-          .map(a => a.coinstatsId)
-      )];
-
-      // ✅ Bundle all coins into a single API call
-      let url;
-      if (coinIds.length > 0) {
-        // Use coinIds parameter to fetch multiple coins at once
-        url = `${AppConfig.API.COINSTATS_BASE}/coins?currency=USD&coinIds=${coinIds.join(',')}`;
-        console.log(`📦 Bundled API request for ${coinIds.length} coins`);
-      } else {
-        // Fallback: Fetch Top 100 if no specific IDs
-        url = `${AppConfig.API.COINSTATS_BASE}/coins?currency=USD&limit=100`;
-        console.log(`📦 Fetching top 100 coins (no specific IDs)`);
-      }
-
-      const response = await apiRateLimiter.execute(() => fetch(url, { headers }), 10); // Highest priority for current prices
-
-      if (!response.ok) {
-        throw new Error(`CoinStats API error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      const result = {};
-
-      // Build lookup map
-      if (data.result && Array.isArray(data.result)) {
-        data.result.forEach(coin => {
-          const priceData = {
-            usd: coin.price,
-            image: coin.icon,
-            id: coin.id,
-            rank: coin.rank,
-            change1h: coin.priceChange1h,
-            change1d: coin.priceChange1d,
-            change1w: coin.priceChange1w,
-            volume: coin.volume,
-            marketCap: coin.marketCap
-          };
-
-          // Map by Symbol (uppercase)
-          result[coin.symbol.toUpperCase()] = priceData;
-
-          // Map by ID (for exact lookups)
-          result[coin.id] = priceData;
-
-          // Cache icon
-          this._iconCache[coin.symbol.toUpperCase()] = coin.icon;
+    if (CacheManager.isValid()) {
+      const cached = CacheManager.getPrices();
+      if (cached && Object.keys(cached).length > 0) {
+        Object.entries(cached).forEach(([key, priceData]) => {
+          if (priceData?.id && key === key.toUpperCase()) {
+            this._coinIdCache[key] = priceData.id;
+            if (priceData.image) this._iconCache[key] = priceData.image;
+          }
         });
+        return cached;
+      }
+    }
 
-        console.log(`✅ Fetched ${data.result.length} coins in 1 API call`);
+    const headers = this._coinstatsHeaders();
+    const result = {};
+
+    const ingest = async (url) => {
+      const response = await apiRateLimiter.execute(() => fetch(url, { headers }), 10);
+      if (!response.ok) throw new Error(`CoinStats API error: ${response.status}`);
+      const data = await response.json();
+      this._ingestCoins(result, data.result);
+    };
+
+    try {
+      const coinIds = [...new Set(assets.filter((a) => a.coinstatsId).map((a) => a.coinstatsId))];
+      const needsSymbolLookup = assets.some((a) => !a.manualPrice && !a.coinstatsId && a.symbol);
+
+      if (coinIds.length > 0) {
+        await ingest(`${AppConfig.API.COINSTATS_BASE}/coins?currency=USD&coinIds=${encodeURIComponent(coinIds.join(','))}`);
       }
 
+      if (needsSymbolLookup || coinIds.length === 0) {
+        await ingest(`${AppConfig.API.COINSTATS_BASE}/coins?currency=USD&limit=100`);
+      }
+
+      const missing = assets.filter((asset) => {
+        if (asset.manualPrice) return false;
+        if (asset.coinstatsId && result[asset.coinstatsId]) return false;
+        if (asset.symbol && result[asset.symbol.toUpperCase()]) return false;
+        return !!(asset.coinstatsId || asset.symbol);
+      });
+
+      for (const asset of missing) {
+        const id = asset.coinstatsId || asset.symbol.toLowerCase();
+        try {
+          const response = await apiRateLimiter.execute(
+            () => fetch(`${AppConfig.API.COINSTATS_BASE}/coins/${encodeURIComponent(id)}`, { headers }),
+            8
+          );
+          if (!response.ok) continue;
+          const payload = await response.json();
+          const coins = Array.isArray(payload?.result) ? payload.result : [payload];
+          this._ingestCoins(result, coins);
+        } catch (err) {
+          console.warn(`Price lookup failed for ${asset.symbol || asset.name}:`, err);
+        }
+      }
+
+      CacheManager.setCache(result);
       return result;
     } catch (error) {
       console.error('Market data fetch error:', error);
-      ToastManager.error('Failed to fetch prices. Using cached data.');
+      this._lastMarketFetchOk = false;
+      const cached = CacheManager.getPrices();
+      if (cached && Object.keys(cached).length > 0) {
+        ToastManager.warning('Failed to fetch prices. Using cached data.');
+        return cached;
+      }
+      ToastManager.error('Failed to fetch prices.');
       return {};
     }
   },
@@ -1854,11 +1888,13 @@ const PortfolioApp = {
 
         if (priceData) {
           currentPrice = priceData.usd;
+          if (priceData.id && asset.symbol) {
+            this._coinIdCache[asset.symbol.toUpperCase()] = priceData.id;
+          }
           if (!iconUrl && priceData.image) {
             iconUrl = priceData.image;
           }
         } else if (!asset.manualPrice) {
-          // Only warn if we expected a price
           const id = asset.coinstatsId || asset.symbol;
           console.warn(`⚠️ No price data found for ${asset.name} (${id})`);
         }
@@ -1879,7 +1915,8 @@ const PortfolioApp = {
         costBasis,
         profitLoss,
         profitLossPercent,
-        iconUrl
+        iconUrl,
+        priceMissing: !asset.manualPrice && !(currentPrice > 0)
       };
     });
 
@@ -1928,12 +1965,13 @@ const PortfolioApp = {
       ? ((grandTotal - totalCostBasis) / totalCostBasis) * 100
       : 0;
 
-    // Record history
-    HistoryTracker.record(grandTotal, {
-      crypto: categories.crypto.total,
-      stocks: categories.stocks.total,
-      gold: categories.gold.total
-    });
+    if (this._lastMarketFetchOk) {
+      HistoryTracker.record(grandTotal, {
+        crypto: categories.crypto.total,
+        stocks: categories.stocks.total,
+        gold: categories.gold.total
+      });
+    }
 
     return {
       categories,
@@ -1982,7 +2020,9 @@ const PortfolioApp = {
   },
 
   formatPercent(value) {
-    return value.toFixed(1) + '%';
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '0.0%';
+    return n.toFixed(1) + '%';
   },
 
   formatProfitLoss(value) {
@@ -1993,13 +2033,12 @@ const PortfolioApp = {
 
 window.PortfolioApp = PortfolioApp;
 
-// Auto pre-warm cache on page load (after 2 seconds)
 setTimeout(() => {
   if (PortfolioApp.getAssets().length > 0) {
     HistoricalPriceAPI.prewarmCache().catch(err =>
       console.warn('Cache pre-warming failed:', err)
     );
   }
-}, 2000);
+}, 8000);
 
 console.log('✓ Optimized Historical API loaded');

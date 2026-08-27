@@ -96,28 +96,27 @@ class PortfolioChart {
         const dy = y - this.centerY;
         const distance = Math.sqrt(dx * dx + dy * dy);
 
-        // Check if within donut ring
         if (distance < this.innerRadius || distance > this.outerRadius) {
             return null;
         }
 
-        // Calculate angle
         let angle = Math.atan2(dy, dx);
-        if (angle < -Math.PI / 2) {
-            angle += Math.PI * 2;
-        }
-        angle += Math.PI / 2; // Adjust for starting at top
-        if (angle > Math.PI * 2) angle -= Math.PI * 2;
+        while (angle < -Math.PI / 2) angle += Math.PI * 2;
+        angle += Math.PI / 2;
+        while (angle >= Math.PI * 2) angle -= Math.PI * 2;
+        while (angle < 0) angle += Math.PI * 2;
 
-        // Find segment at this angle
         for (const segment of this.segments) {
             let startAngle = segment.startAngle + Math.PI / 2;
             let endAngle = segment.endAngle + Math.PI / 2;
+            while (startAngle < 0) startAngle += Math.PI * 2;
+            while (endAngle < 0) endAngle += Math.PI * 2;
+            while (startAngle >= Math.PI * 2) startAngle -= Math.PI * 2;
+            while (endAngle >= Math.PI * 2) endAngle -= Math.PI * 2;
 
-            if (startAngle < 0) startAngle += Math.PI * 2;
-            if (endAngle < 0) endAngle += Math.PI * 2;
-
-            if (angle >= startAngle && angle <= endAngle) {
+            if (startAngle <= endAngle) {
+                if (angle >= startAngle && angle < endAngle) return segment;
+            } else if (angle >= startAngle || angle < endAngle) {
                 return segment;
             }
         }
@@ -128,31 +127,49 @@ class PortfolioChart {
     showTooltip(x, y, segment, forceCenter = false) {
         if (!this.tooltip) return;
 
-        // Build tooltip content
-        const colorStyle = `background: linear-gradient(135deg, ${this.colors[segment.category].gradient.join(', ')})`;
+        while (this.tooltip.firstChild) {
+            this.tooltip.removeChild(this.tooltip.firstChild);
+        }
 
-        // Sort assets by value (or percentage) descending
+        const header = document.createElement('div');
+        header.className = 'tooltip-header';
+
+        const colorSwatch = document.createElement('span');
+        colorSwatch.className = 'tooltip-color';
+        colorSwatch.style.background = `linear-gradient(135deg, ${this.colors[segment.category].gradient.join(', ')})`;
+
+        const headerLabel = document.createElement('span');
+        headerLabel.textContent = `${this.getCategoryLabel(segment.category)} - ${PortfolioApp.formatPercent(segment.percentage)}`;
+
+        header.appendChild(colorSwatch);
+        header.appendChild(headerLabel);
+
+        const assetsWrap = document.createElement('div');
+        assetsWrap.className = 'tooltip-assets';
+
         const sortedAssets = [...segment.assets].sort((a, b) => b.categoryPercentage - a.categoryPercentage);
+        if (sortedAssets.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'tooltip-asset';
+            empty.textContent = 'No assets';
+            assetsWrap.appendChild(empty);
+        } else {
+            sortedAssets.forEach((asset) => {
+                const row = document.createElement('div');
+                row.className = 'tooltip-asset';
+                const name = document.createElement('span');
+                name.textContent = asset.name || '';
+                const value = document.createElement('span');
+                value.className = 'tooltip-asset-value';
+                value.textContent = PortfolioApp.formatPercent(asset.categoryPercentage);
+                row.appendChild(name);
+                row.appendChild(value);
+                assetsWrap.appendChild(row);
+            });
+        }
 
-        let assetsHtml = '';
-        sortedAssets.forEach(asset => {
-            assetsHtml += `
-        <div class="tooltip-asset">
-          <span>${asset.name}</span>
-          <span class="tooltip-asset-value">${PortfolioApp.formatPercent(asset.categoryPercentage)}</span>
-        </div>
-      `;
-        });
-
-        this.tooltip.innerHTML = `
-      <div class="tooltip-header">
-        <span class="tooltip-color" style="${colorStyle}"></span>
-        <span>${this.getCategoryLabel(segment.category)} - ${PortfolioApp.formatPercent(segment.percentage)}</span>
-      </div>
-      <div class="tooltip-assets">
-        ${assetsHtml || '<div class="tooltip-asset">No assets</div>'}
-      </div>
-    `;
+        this.tooltip.appendChild(header);
+        this.tooltip.appendChild(assetsWrap);
 
         // Always use centered mode as requested for both desktop and mobile
         // This provides the "cool animation" consistently
@@ -307,7 +324,9 @@ class PortfolioChart {
         });
 
         // Draw segment separators
-        ctx.strokeStyle = '#0a0a0f';
+        ctx.strokeStyle = document.documentElement.getAttribute('data-theme') === 'light'
+            ? '#e2e8f0'
+            : '#0a0a0f';
         ctx.lineWidth = 2;
 
         this.segments.forEach(segment => {

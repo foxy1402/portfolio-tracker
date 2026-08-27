@@ -3,17 +3,28 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="description" content="Track your crypto, stocks, and gold portfolio with real-time prices">
+  <meta name="view-transition" content="same-origin">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
   <title>Portfolio Tracker | Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/png" href="images/icon-192.png">
   <link rel="apple-touch-icon" href="images/icon-192.png">
   <meta name="theme-color" content="#0f172a">
+  <script>
+    (function () {
+      var r = /#\/manage/.test(location.hash) ? 'manage'
+        : /#\/rebalance/.test(location.hash) ? 'rebalance'
+        : 'dashboard';
+      document.documentElement.dataset.bootRoute = r;
+    })();
+  </script>
   <style>
     .profit {
       color: #00d4aa;
@@ -70,7 +81,7 @@
     }
 
     /* Mobile-optimized asset item */
-    .asset-item {
+    #view-dashboard .asset-item {
       flex-wrap: wrap;
     }
 
@@ -92,7 +103,7 @@
 
     /* Mobile responsive */
     @media (max-width: 480px) {
-      .asset-item {
+      #view-dashboard .asset-item {
         flex-direction: row;
         align-items: center;
         gap: 0;
@@ -149,7 +160,7 @@
     }
 
     /* Mobile Mode Layout - only applies when checkbox is checked */
-    body.mobile-mode main {
+    body.mobile-mode #view-dashboard.is-active {
       display: flex;
       flex-direction: column;
     }
@@ -271,27 +282,31 @@
   <div class="container">
     <!-- Header -->
     <header class="header">
-      <div class="logo">
+      <a href="#/" class="logo" data-route="dashboard">
         <img src="images/icon-192.png" alt="Logo" style="width: 32px; height: 32px; border-radius: 6px;">
         Portfolio Tracker
-      </div>
+      </a>
       <nav style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
         <!-- Refresh Button -->
 
         <!-- Currency Selector -->
         <select id="currencySelect" class="currency-select" title="Select currency">
-          <option value="USD">🇺🇸 USD</option>
-          <option value="VND">🇻🇳 VND</option>
+          <option value="USD">USD</option>
+          <option value="VND">VND</option>
+          <option value="EUR">EUR</option>
+          <option value="GBP">GBP</option>
+          <option value="JPY">JPY</option>
         </select>
         <!-- Theme Toggle -->
         <button id="themeToggle" class="theme-toggle" title="Toggle theme">
           <span id="themeIcon">🌙</span>
         </button>
-        <a href="rebalance.html" class="nav-link">⚖️ Rebalance</a>
-        <a href="admin.html" class="nav-link">⚙️ Manage</a>
+        <a href="#/rebalance" class="nav-link" data-route="rebalance">⚖️ Rebalance</a>
+        <a href="#/manage" class="nav-link" data-route="manage">⚙️ Manage</a>
       </nav>
     </header>
 
+    <section id="view-dashboard" class="app-view is-active" data-view="dashboard">
     <!-- Main Dashboard -->
     <main>
       <!-- Mobile Hero Section (Redesigned) -->
@@ -313,6 +328,7 @@
         </div>
         <div class="mobile-hero-chart">
           <canvas id="heroMiniChart"></canvas>
+          <canvas id="heroMiniChartOverlay" class="chart-overlay-canvas"></canvas>
           <div id="mobileChartLoading" class="mobile-chart-loading" style="display: none;">
             <span class="loading-dots">Loading</span>
           </div>
@@ -439,6 +455,7 @@
 
             <div class="performance-chart-wrapper">
               <canvas id="historyChart"></canvas>
+              <canvas id="historyChartOverlay" class="chart-overlay-canvas"></canvas>
               <div class="chart-tooltip-floating" id="chartTooltipFloating">
                 <div class="chart-tooltip-date"></div>
                 <div class="chart-tooltip-value"></div>
@@ -479,7 +496,7 @@
             <div style="display: flex; align-items: center; gap: 12px;">
               <span id="portfolioPlainValue"
                 style="font-size: 1rem; color: var(--text-secondary); font-weight: 500;">$0</span>
-              <a href="admin.html" class="mobile-section-action">Manage →</a>
+              <a href="#/manage" class="mobile-section-action">Manage →</a>
             </div>
           </div>
 
@@ -500,6 +517,366 @@
         </div>
       </div>
     </main>
+    </section>
+
+    <section id="view-manage" class="app-view" data-view="manage" hidden>
+      <!-- Auth Modal -->
+    <div class="auth-overlay" id="authOverlay" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+        <div class="auth-modal">
+            <h2 id="authTitle">Admin Login</h2>
+            <p class="form-hint">
+                Enter your GitHub Personal Access Token to sync data across devices.
+                Token is only stored in memory and cleared when you close the tab.
+            </p>
+            <form id="authForm">
+                <div class="form-group">
+                    <label class="form-label" for="authToken">GitHub Token</label>
+                    <input type="password" class="form-input" id="authToken" placeholder="ghp_xxxxxxxxxxxx" required>
+                    <div class="form-hint">
+                        <a href="https://github.com/settings/tokens/new?scopes=gist&description=Portfolio%20Tracker"
+                            target="_blank" style="color: var(--accent-crypto);">
+                            Create a token with 'gist' scope →
+                        </a>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">
+                    🔓 Login
+                </button>
+                <div id="authError" style="color: #ff5050; margin-top: 1rem; display: none;"></div>
+            </form>
+            <div style="margin-top: var(--spacing-md); text-align: center;">
+                <button class="btn btn-secondary" id="skipAuthBtn">
+                    Skip (Local Only)
+                </button>
+            </div>
+        </div>
+    </div>
+
+      <!-- Sync Bar -->
+        <div class="sync-bar" id="syncBar" style="display: none;">
+            <div class="user-badge" id="userBadge">
+                👤 <span id="username">-</span>
+            </div>
+            <div class="sync-status" id="syncStatus">Ready to sync</div>
+            <button class="btn btn-secondary" id="syncDownBtn" title="Download from cloud">
+                ⬇️ Download
+            </button>
+            <button class="btn btn-primary" id="syncUpBtn" title="Upload to cloud">
+                ⬆️ Upload
+            </button>
+            <button class="btn btn-secondary" id="logoutBtn" title="Logout">
+                🚪
+            </button>
+        </div>
+
+        <!-- Admin Content -->
+        <main>
+            <div class="admin-grid">
+                <!-- Left Column: Input Forms -->
+                <div style="display: flex; flex-direction: column; gap: var(--spacing-lg);">
+                    <!-- CoinStats API Configuration -->
+                    <div class="card fade-in" id="apiKeyCard">
+                        <div class="card-title">🔑 CoinStats API Key (Optional)</div>
+                        <p style="color: var(--text-secondary); margin-bottom: var(--spacing-md); font-size: 0.9rem;">
+                            CoinStats API is free for basic use. Add a key to increase rate limits.
+                        </p>
+
+                        <div class="form-group">
+                            <label class="form-label" for="coinstatsApiKey">API Key</label>
+                            <input type="password" class="form-input" id="coinstatsApiKey"
+                                placeholder="Enter your CoinStats API key">
+                            <div class="form-hint">
+                                <a href="https://coinstats.app/api-pricing" target="_blank"
+                                    style="color: var(--accent-crypto);">
+                                    Get API key →
+                                </a>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                            <button class="btn btn-primary" id="saveKeyBtn">
+                                💾 Save API Key
+                            </button>
+                            <button class="btn btn-secondary" id="testKeyBtn">
+                                🧪 Test Connection
+                            </button>
+                            <button type="button" class="btn btn-secondary" id="showKeyBtn">
+                                👁️ Show Key
+                            </button>
+                            <button class="btn btn-danger" id="clearKeyBtn">
+                                🗑️ Clear Key
+                            </button>
+                        </div>
+
+                        <div id="apiKeyStatus" style="margin-top: 12px; display: none;"></div>
+                    </div>
+
+                    <!-- Add Asset Form -->
+                    <div class="card fade-in">
+                        <div class="card-title" id="formTitle">Add New Asset</div>
+
+                        <form id="assetForm">
+                            <input type="hidden" id="editingId" value="">
+
+                            <!-- Category Selector -->
+                            <div class="form-group">
+                                <label class="form-label">Category</label>
+                                <div class="category-selector">
+                                    <button type="button" class="category-btn crypto active" data-category="crypto">
+                                        🪙 Crypto
+                                    </button>
+                                    <button type="button" class="category-btn stocks" data-category="stocks">
+                                        📈 Stocks
+                                    </button>
+                                    <button type="button" class="category-btn gold" data-category="gold">
+                                        🥇 Gold
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Asset Name -->
+                            <div class="form-group">
+                                <label class="form-label" for="assetName">Asset Name</label>
+                                <input type="text" class="form-input" id="assetName"
+                                    placeholder="e.g., Bitcoin, Tesla Stock, PAX Gold" required>
+                            </div>
+
+                            <!-- Symbol -->
+                            <div class="form-group">
+                                <label class="form-label" for="assetSymbol">
+                                    Symbol
+                                    <span style="color: var(--text-muted); font-weight: normal;">(required)</span>
+                                </label>
+                                <input type="text" class="form-input" id="assetSymbol"
+                                    placeholder="e.g., BTC, ETH, AAPL, PAXG" required>
+                            </div>
+
+                            <!-- CoinStats ID -->
+                            <div class="form-group">
+                                <label class="form-label" for="coinstatsId">
+                                    CoinStats Coin ID
+                                    <span style="color: var(--text-muted); font-weight: normal;">(optional)</span>
+                                </label>
+                                <input type="text" class="form-input" id="coinstatsId"
+                                    placeholder="e.g., bitcoin, ethereum">
+                                <div class="form-hint">
+                                    Override symbol lookup. Find IDs in CoinStats URL (e.g.,
+                                    coinstats.app/coins/<strong>bitcoin</strong>).
+                                </div>
+                            </div>
+
+                            <!-- Manual Price (alternative to API) -->
+                            <div class="form-group">
+                                <label class="form-label" for="manualPrice">
+                                    Manual Price (USD)
+                                    <span style="color: var(--text-muted); font-weight: normal;">(overrides API)</span>
+                                </label>
+                                <input type="number" class="form-input" id="manualPrice"
+                                    placeholder="Leave empty to use CoinStats" step="any" min="0">
+                            </div>
+
+                            <!-- Buy/Average Price for ROI -->
+                            <div class="form-group">
+                                <label class="form-label" for="buyPrice">
+                                    Buy/Avg Price (USD)
+                                    <span style="color: var(--text-muted); font-weight: normal;">(for ROI
+                                        tracking)</span>
+                                </label>
+                                <input type="number" class="form-input" id="buyPrice"
+                                    placeholder="Your average purchase price" step="any" min="0">
+                            </div>
+
+                            <!-- ✨ NEW: Purchase Date Field -->
+                            <div class="form-group">
+                                <label class="form-label" for="purchaseDate">
+                                    Purchase Date
+                                    <span style="color: var(--text-muted); font-weight: normal;">(for performance
+                                        tracking)</span>
+                                </label>
+                                <input type="date" class="form-input" id="purchaseDate" max="9999-12-31">
+                                <div class="form-hint">
+                                    When did you buy this asset? Used to calculate accurate historical performance.
+                                </div>
+                            </div>
+
+                            <!-- Balance -->
+                            <div class="form-group">
+                                <label class="form-label" for="assetBalance">Balance (Amount Held)</label>
+                                <input type="number" class="form-input" id="assetBalance"
+                                    placeholder="e.g., 0.5, 10, 100" step="any" min="0" required>
+                            </div>
+
+                            <!-- Icon URL (manual override) -->
+                            <div class="form-group">
+                                <label class="form-label" for="iconUrl">
+                                    Icon URL
+                                    <span style="color: var(--text-muted); font-weight: normal;">(optional, auto-fetched
+                                        with CoinStats ID)</span>
+                                </label>
+                                <input type="url" class="form-input" id="iconUrl"
+                                    placeholder="https://... (paste image URL)">
+                            </div>
+
+                            <!-- Notes -->
+                            <div class="form-group">
+                                <label class="form-label" for="assetNotes">
+                                    Notes
+                                    <span style="color: var(--text-muted); font-weight: normal;">(optional)</span>
+                                </label>
+                                <textarea class="form-input notes-field" id="assetNotes"
+                                    placeholder="Add notes about this asset (strategy, target, reminders...)"></textarea>
+                            </div>
+
+                            <!-- Submit Buttons -->
+                            <div style="display: flex; gap: 1rem;">
+                                <button type="submit" class="btn btn-primary btn-block">
+                                    💾 Save Asset
+                                </button>
+                                <button type="button" class="btn btn-secondary" id="cancelBtn" style="display: none;">
+                                    Cancel
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Bulk Update Purchase Dates (Compact) -->
+                    <div class="card fade-in">
+                        <div class="card-title" style="margin-bottom: 12px; font-size: 1rem;">📅 Bulk Update Dates</div>
+                        <div style="display: flex; gap: 12px; align-items: center;">
+                            <input type="date" class="form-input" id="bulkPurchaseDate" style="flex:1;">
+                            <button class="btn btn-secondary" id="bulkUpdateBtn" style="white-space: nowrap;">
+                                Apply to All
+                            </button>
+                        </div>
+                        <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 8px; margin-bottom: 0;">
+                            Set default date for all assets.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Right Column: Lists -->
+                <div style="display: flex; flex-direction: column; gap: var(--spacing-lg);">
+                    <!-- Assets List -->
+                    <div class="card fade-in">
+                        <div class="card-title"
+                            style="display: flex; justify-content: space-between; align-items: center;">
+                            Your Assets
+                            <div style="display: flex; gap: 8px;">
+                                <button class="export-btn" id="exportCsvBtn" title="Export to CSV">
+                                    📥 Export CSV
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="adminAssetsList">
+                            <div class="empty-state">
+                                <div class="empty-state-icon">📭</div>
+                                <p>No assets added yet</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cache Management -->
+                    <div class="card fade-in">
+                        <div class="card-title">🗄️ Cache Management</div>
+                        <div id="cacheStats"
+                            style="margin-bottom: 12px; font-size: 0.9rem; color: var(--text-secondary);">
+                            Click 'Check Stats' to view cache usage.
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn btn-secondary" id="checkCacheBtn">
+                                Check Stats
+                            </button>
+                            <button class="btn btn-danger" id="clearCacheBtn">
+                                Clear Cache
+                            </button>
+                        </div>
+                    </div>
+
+
+
+                </div>
+            </div>
+
+            <!-- Popular CoinStats IDs Reference -->
+            <div class="card fade-in" style="margin-top: var(--spacing-lg);">
+                <div class="card-title">Popular Symbols & IDs</div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem;">
+                    <div>
+                        <strong style="color: var(--accent-crypto);">Major Coins:</strong>
+                        <ul
+                            style="list-style: none; color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.5rem;">
+                            <li>Bitcoin → BTC (ID: <code style="color: var(--text-primary);">bitcoin</code>)</li>
+                            <li>Ethereum → ETH (ID: <code style="color: var(--text-primary);">ethereum</code>)</li>
+                            <li>BNB → BNB (ID: <code style="color: var(--text-primary);">binance-coin</code>)</li>
+                            <li>Solana → SOL (ID: <code style="color: var(--text-primary);">solana</code>)</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <strong style="color: var(--accent-crypto);">Altcoins:</strong>
+                        <ul
+                            style="list-style: none; color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.5rem;">
+                            <li>NEAR → NEAR (ID: <code style="color: var(--text-primary);">near-protocol</code>)</li>
+                            <li>Chainlink → LINK (ID: <code style="color: var(--text-primary);">chainlink</code>)</li>
+                            <li>Aave → AAVE (ID: <code style="color: var(--text-primary);">aave</code>)</li>
+                            <li>Uniswap → UNI (ID: <code style="color: var(--text-primary);">uniswap</code>)</li>
+                        </ul>
+                    </div>
+                </div>
+                <p style="margin-top: 1rem; font-size: 0.85rem; color: var(--text-muted);">
+                    💡 <strong>Pro Tip:</strong> Just use <strong>Symbol</strong> (BTC, ETH) - finding the ID is rarely
+                    needed!
+                </p>
+            </div>
+        </main>
+    </section>
+
+    <section id="view-rebalance" class="app-view rebalance-container" data-view="rebalance" hidden>
+      <main>
+            <!-- Current Portfolio Summary -->
+            <div class="card fade-in">
+                <div class="card-title">📊 Current Allocation</div>
+                <div id="currentAllocation" class="current-allocation">
+                    <div class="loading">Loading portfolio</div>
+                </div>
+                <div style="text-align: center; color: var(--text-muted); font-size: 0.9rem;" id="rebalanceTotalValue">
+                    Total Portfolio: $0
+                </div>
+            </div>
+
+            <!-- Target Allocation Input -->
+            <div class="card fade-in" style="margin-top: var(--spacing-lg);">
+                <div class="card-title">🎯 Target Allocation</div>
+                <p style="color: var(--text-secondary); margin-bottom: var(--spacing-md); font-size: 0.9rem;">
+                    Set category targets (must add to 100%). Expand each category to select assets and set their
+                    intra-category allocation.
+                </p>
+
+                <!-- Category Sections with Assets -->
+                <div id="categorySelections"></div>
+
+                <div class="target-total" id="targetTotal">Total: 100%</div>
+
+                <button class="btn btn-primary btn-block" id="calculateBtn">
+                    🧮 Calculate Rebalance
+                </button>
+            </div>
+
+            <!-- Results Section -->
+            <div class="results-section" id="resultsSection" style="display: none;">
+                <div class="card fade-in">
+                    <div class="card-title">📋 Rebalance Actions</div>
+                    <div id="resultsContent"></div>
+                </div>
+
+                <!-- Summary Box -->
+                <div class="summary-box" id="summaryBox">
+                    <div class="summary-title">📊 Summary</div>
+                    <div class="summary-grid" id="summaryGrid"></div>
+                </div>
+            </div>
+        </main>
+    </section>
   </div>
 
   <!-- Tooltip -->
@@ -508,14 +885,22 @@
   <!-- Mobile Bottom Navigation -->
   <nav class="mobile-bottom-nav" id="mobileBottomNav">
     <div class="mobile-bottom-nav-inner">
-      <button class="bottom-nav-item active" data-view="assets">
+      <button type="button" class="bottom-nav-item active" data-route="dashboard" data-view="assets">
         <span class="bottom-nav-icon">💰</span>
         <span>Assets</span>
       </button>
-      <button class="bottom-nav-item" data-view="chart">
+      <button type="button" class="bottom-nav-item" data-route="dashboard" data-view="chart">
         <span class="bottom-nav-icon">📊</span>
         <span>Distribution</span>
       </button>
+      <a href="#/rebalance" class="bottom-nav-item" data-route="rebalance">
+        <span class="bottom-nav-icon">⚖️</span>
+        <span>Rebalance</span>
+      </a>
+      <a href="#/manage" class="bottom-nav-item" data-route="manage">
+        <span class="bottom-nav-icon">⚙️</span>
+        <span>Manage</span>
+      </a>
 
     </div>
   </nav>
@@ -526,1409 +911,11 @@
   <script src="js/app.js"></script>
   <script src="js/dom-utils.js"></script>
   <script src="js/chart.js"></script>
-  <script>
-    // Dashboard Logic
-    let chart;
-    let chartData = [];
-    let chartCanvas = null;
-    let chartCtx = null;
-    let currentPeriodDays = 7;
-    let isRefreshing = false;
+  <script src="js/dashboard.js"></script>
+  <script src="js/admin.js"></script>
+  <script src="js/rebalance.js"></script>
+  <script src="js/router.js"></script>
 
-    // Race condition control
-    let isLoadingChart = false;
-    let pendingChartUpdate = null;
-    let currentChartController = null; // NEW: AbortController
-
-    // Performance limiting
-    let lastDrawTime = 0;
-    const DRAW_THROTTLE = 16; // 60fps max
-
-    async function initDashboard() {
-      // Initialize chart
-      chart = new PortfolioChart('portfolioChart', 'chartTooltip');
-      window.portfolioChart = chart;
-
-      // Add legend click listeners
-      document.querySelectorAll('.legend-item').forEach(item => {
-        item.addEventListener('click', () => {
-          const category = item.dataset.category;
-          chart.showTooltipForCategory(category);
-        });
-      });
-
-      // Load and display data
-      await refreshData();
-    }
-
-    async function refreshData() {
-      if (isRefreshing) return;
-
-      const refreshBtn = document.getElementById('refreshBtn');
-      const mobileRefreshBtn = document.getElementById('mobileRefreshBtn');
-      isRefreshing = true;
-      refreshBtn?.classList.add('spinning');
-      mobileRefreshBtn?.classList.add('spinning');
-
-      try {
-        const data = await PortfolioApp.calculatePortfolio();
-        window.lastPortfolioData = data; // Cache for UI restoration
-        updateUI(data);
-        chart.update(data);
-        if (typeof updateHistoryChart === 'function') {
-          updateHistoryChart(currentPeriodDays);
-        }
-      } catch (error) {
-        console.error('Error refreshing data:', error);
-      } finally {
-        isRefreshing = false;
-        refreshBtn?.classList.remove('spinning');
-        mobileRefreshBtn?.classList.remove('spinning');
-      }
-    }
-
-    function updateUI(data) {
-      // Update total value - use compact format for large numbers
-      const formattedTotal = PortfolioApp.formatCurrencyCompact(data.grandTotal);
-      document.getElementById('totalValue').textContent = formattedTotal;
-
-      // Update Hero Section (Mobile)
-      document.getElementById('heroTotalValue').textContent = PortfolioApp.formatCurrency(data.grandTotal);
-
-      // Update plain value next to "Your Assets" - full number format
-      const plainValueEl = document.getElementById('portfolioPlainValue');
-      if (plainValueEl) {
-        plainValueEl.textContent = new Intl.NumberFormat('en-US', {
-          style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0
-        }).format(data.grandTotal);
-      }
-
-      // Update category stats (Desktop)
-      const categories = ['crypto', 'stocks', 'gold'];
-      categories.forEach(cat => {
-        const catData = data.categories[cat];
-        document.getElementById(`${cat}Value`).textContent =
-          PortfolioApp.formatCurrency(catData.total);
-        document.getElementById(`${cat}Percent`).textContent =
-          PortfolioApp.formatPercent(catData.percentage);
-
-        // Show profit/loss per category
-        const profitEl = document.getElementById(`${cat}Profit`);
-        if (catData.costBasis > 0) {
-          const isPositive = catData.profitLoss >= 0;
-          const sign = isPositive ? '+' : '';
-          profitEl.innerHTML = `
-            <span class="profit-badge ${isPositive ? 'positive' : 'negative'}">
-              ${sign}${PortfolioApp.formatPercent(catData.profitLossPercent)}
-            </span>
-          `;
-        } else {
-          profitEl.innerHTML = '';
-        }
-
-        // Update mobile category pills
-        const pillValue = document.getElementById(`pill${cat.charAt(0).toUpperCase() + cat.slice(1)}Value`);
-        if (pillValue) {
-          pillValue.textContent = PortfolioApp.formatCurrencyCompact(catData.total);
-        }
-      });
-
-      // Update total profit/loss (Desktop)
-      const profitContainer = document.getElementById('totalProfitContainer');
-      const profitValue = document.getElementById('totalProfitValue');
-
-      // Mobile Hero PnL elements
-      const heroPnlContainer = document.getElementById('heroPnlContainer');
-      const heroPnlBadge = document.getElementById('heroPnlBadge');
-      const heroPnlAmount = document.getElementById('heroPnlAmount');
-      const heroPnlPercent = document.getElementById('heroPnlPercent');
-
-      if (data.totalCostBasis > 0) {
-        const isPositive = data.totalProfitLoss >= 0;
-        const sign = isPositive ? '+' : '';
-
-        // Desktop
-        if (profitContainer) {
-          profitContainer.style.display = 'block';
-          profitValue.className = `total-profit-value ${isPositive ? 'profit' : 'loss'}`;
-          profitValue.textContent = `${sign}${PortfolioApp.formatCurrency(data.totalProfitLoss)} (${sign}${PortfolioApp.formatPercent(data.totalProfitLossPercent)})`;
-        }
-
-        // Mobile Hero
-        if (heroPnlContainer) {
-          heroPnlContainer.style.display = 'flex';
-          heroPnlBadge.className = `mobile-pnl-badge ${isPositive ? 'positive' : 'negative'}`;
-          heroPnlPercent.textContent = `${isPositive ? '↑' : '↓'} ${sign}${PortfolioApp.formatPercent(data.totalProfitLossPercent)}`;
-          heroPnlAmount.textContent = `${sign}${PortfolioApp.formatCurrency(data.totalProfitLoss)}`;
-          heroPnlAmount.className = `mobile-pnl-amount ${isPositive ? 'positive' : 'negative'}`;
-        }
-      } else {
-        if (profitContainer) profitContainer.style.display = 'none';
-        if (heroPnlContainer) heroPnlContainer.style.display = 'none';
-      }
-
-      // Update performance chart header (Desktop)
-      const perfCurrentValue = document.getElementById('perfCurrentValue');
-      if (perfCurrentValue) {
-        perfCurrentValue.textContent = PortfolioApp.formatCurrency(data.grandTotal);
-      }
-
-      // Update assets list - Sort by Value Descending Globally
-      const sortedAssets = [...data.assets].sort((a, b) => b.value - a.value);
-      updateAssetsList(sortedAssets);
-    }
-
-    function updateAssetsList(assets) {
-      const container = document.getElementById('assetsList');
-
-      if (assets.length === 0) {
-        DOMUtils.showEmptyState(container, 'No assets yet', {
-          text: 'Add your first asset',
-          href: 'admin.html'
-        });
-        return;
-      }
-
-      // Clear and render using safe DOM utils
-      container.innerHTML = '';
-      assets.forEach(asset => {
-        const item = DOMUtils.createAssetItem(asset, {
-          showValue: true,
-          showPnL: true
-        });
-        container.appendChild(item);
-      });
-    }
-
-    function getCategoryLabel(category) {
-      const labels = {
-        crypto: 'Crypto',
-        stocks: 'Stocks',
-        gold: 'Gold'
-      };
-      return labels[category] || category;
-    }
-
-    // Mobile Mode Toggle
-    function initMobileMode() {
-      const checkbox = document.getElementById('mobileMode');
-      const saved = localStorage.getItem('portfolioMobileMode');
-
-      const applyMobileMode = (isMobile) => {
-        if (isMobile) {
-          document.body.classList.add('mobile-mode');
-          switchMobileView('assets');
-        } else {
-          document.body.classList.remove('mobile-mode');
-          document.getElementById('chartSection').style.display = '';
-          document.getElementById('assetsSection').style.display = '';
-        }
-
-        // ✅ Clean up ALL chart states before redrawing
-        cleanupAllCharts();
-
-        // Redraw charts after layout change
-        setTimeout(() => {
-          if (typeof chartData !== 'undefined' && chartData.length > 0) {
-            drawMiniChart(chartData, 'heroMiniChart');
-            drawEnhancedLineChart(chartData, 'historyChart');
-          }
-          if (window.portfolioChart) {
-            window.portfolioChart.setupCanvas();
-            window.portfolioChart.draw();
-          }
-        }, 50);
-      };
-
-      if (saved === 'true') {
-        checkbox.checked = true;
-        applyMobileMode(true);
-      }
-
-      checkbox.addEventListener('change', function () {
-        applyMobileMode(this.checked);
-        localStorage.setItem('portfolioMobileMode', this.checked);
-      });
-    }
-
-    // ✅ NEW: Cleanup function for all charts
-    function cleanupAllCharts() {
-      // Clean up history chart
-      const historyCanvas = document.getElementById('historyChart');
-      if (historyCanvas && historyCanvas._chartCleanup) {
-        historyCanvas._chartCleanup();
-      }
-
-      // Clean up hero mini chart
-      const heroCanvas = document.getElementById('heroMiniChart');
-      if (heroCanvas && heroCanvas._chartCleanup) {
-        heroCanvas._chartCleanup();
-      }
-
-      // Hide all tooltips
-      const tooltip = document.getElementById('chartTooltipFloating');
-      if (tooltip) {
-        tooltip.classList.remove('visible');
-      }
-
-      // Reset hero stats to default
-      resetHeroStats();
-      if (typeof resetDesktopStats === 'function') {
-        // Define resetDesktopStats if needed or ensure it exists, 
-        // guidev3 calls it but it might not be defined in file. 
-        // Checking existing code, updateDesktopStats exists but resetDesktopStats might not.
-        // Wait, guidev3 code uses resetDesktopStats() in cleanupAllCharts.
-        // I should check if I need to implement it.
-        // For now let's safely call it if it exists or implement a simple one.
-        // To be safe and follow guide, I will just call it but I'll add a check or implementation if missing.
-        // Actually, looking at existing code I read, there is NO resetDesktopStats.
-        // I should implement it or remove the call if it breaks.
-        // Guide says:
-        // resetHeroStats();
-        // resetDesktopStats();
-        // I will assume I need to add resetDesktopStats as well or avoiding calling it if not checking.
-        // Let's look at `index.html` again. I have `resetHeroStats`. I don't see `resetDesktopStats`.
-        // I will implement `resetDesktopStats` below `cleanupAllCharts` to be safe, or inside it.
-      }
-      resetDesktopStats();
-    }
-
-    function resetDesktopStats() {
-      // helper to reset desktop stats
-      const badgeEl = document.getElementById('chartDataBadge');
-      if (badgeEl) badgeEl.style.opacity = '1';
-      const dateEl = document.getElementById('perfScrubDate');
-      if (dateEl) dateEl.style.display = 'none';
-
-      if (window.currentViewStats) {
-        const valueEl = document.getElementById('perfCurrentValue');
-        if (valueEl) valueEl.textContent = PortfolioApp.formatCurrency(window.currentViewStats.grandTotal || window.currentViewStats.newest); // Fallback
-        // We might want to reset other fields too but usually scrubbing only affects the header value and date.
-      }
-    }
-
-    // Mobile View Switching (Bottom Nav)
-    function switchMobileView(view) {
-      if (!document.body.classList.contains('mobile-mode')) return;
-
-      // Update bottom nav buttons
-      document.querySelectorAll('.bottom-nav-item').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.view === view);
-      });
-
-      // Hide all sections
-      const chartSection = document.getElementById('chartSection');
-      const assetsSection = document.getElementById('assetsSection');
-      const performanceSection = document.getElementById('performanceSection');
-      const mobileAssetsHeader = document.getElementById('mobileAssetsHeader');
-
-      chartSection.classList.remove('active-tab');
-      assetsSection.style.display = 'none';
-      if (mobileAssetsHeader) mobileAssetsHeader.style.display = 'none';
-
-      // Show selected view
-      switch (view) {
-        case 'assets':
-          assetsSection.style.display = 'block';
-          chartSection.style.display = 'none'; // Explicitly hide chart
-          if (mobileAssetsHeader) mobileAssetsHeader.style.display = 'flex';
-          break;
-        case 'chart':
-          chartSection.classList.add('active-tab');
-          chartSection.style.display = 'block';
-          // Hide performance section in chart view
-          if (performanceSection) performanceSection.style.display = 'none';
-
-          // Trigger chart resize after display/visible
-          setTimeout(() => {
-            if (window.portfolioChart) {
-              window.portfolioChart.setupCanvas();
-              window.portfolioChart.draw();
-            }
-          }, 50);
-          break;
-
-      }
-    }
-
-    // Initialize Bottom Navigation
-    function initBottomNav() {
-      document.querySelectorAll('.bottom-nav-item[data-view]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const view = btn.dataset.view;
-          if (view) switchMobileView(view);
-        });
-      });
-    }
-
-
-
-    // Event listeners
-
-
-    // Mobile header buttons
-
-    document.getElementById('mobileThemeBtn')?.addEventListener('click', () => {
-      const newTheme = ThemeManager.toggle();
-      document.getElementById('mobileThemeBtn').textContent = newTheme === 'dark' ? '🌙' : '☀️';
-      document.getElementById('themeIcon').textContent = newTheme === 'dark' ? '🌙' : '☀️';
-    });
-
-    // Theme Toggle
-    document.getElementById('themeToggle').addEventListener('click', () => {
-      const newTheme = ThemeManager.toggle();
-      document.getElementById('themeIcon').textContent = newTheme === 'dark' ? '🌙' : '☀️';
-      document.getElementById('mobileThemeBtn').textContent = newTheme === 'dark' ? '🌙' : '☀️';
-      ToastManager.success(`Switched to ${newTheme} theme`);
-    });
-
-    // Currency Selector
-    document.getElementById('currencySelect').addEventListener('change', async (e) => {
-      await CurrencyManager.setCurrency(e.target.value);
-      ToastManager.info(`Currency changed to ${e.target.value}`);
-      refreshData();
-    });
-
-    // Pull to Refresh Logic
-    function initPullToRefresh() {
-      const loader = document.getElementById('refreshLoader');
-      const spinner = document.getElementById('refreshSpinner');
-      const main = document.querySelector('main');
-
-      let startY = 0;
-      let currentY = 0;
-      let isPulling = false;
-      let isRefreshing = false;
-
-      const THRESHOLD = 80; // Pull distance to trigger refresh
-      const MAX_PULL = 120; // Max visual pull distance
-
-      document.body.addEventListener('touchstart', (e) => {
-        // Only active in mobile mode and at top of page
-        if (!document.body.classList.contains('mobile-mode') || window.scrollY > 0) return;
-
-        // Prevent if touching a chart (to avoid conflict with scrubbing)
-        if (e.target.tagName === 'CANVAS') return;
-
-        startY = e.touches[0].clientY;
-        isPulling = true;
-        loader.style.transition = 'none'; // distinct types
-      }, { passive: true });
-
-      document.body.addEventListener('touchmove', (e) => {
-        if (!isPulling || isRefreshing) return;
-
-        const y = e.touches[0].clientY;
-        const delta = y - startY;
-
-        // Only handle pull down when at top
-        if (delta > 0 && window.scrollY <= 0) {
-          // Add resistance
-          currentY = Math.min(delta * 0.5, MAX_PULL);
-
-          loader.style.transform = `translateY(${currentY}px)`;
-          main.style.transform = `translateY(${currentY}px)`; // Pull content too
-
-          // Visual feedback
-          if (currentY > 60) {
-            loader.classList.add('visible');
-            const rotation = (currentY - 60) * 10;
-            spinner.style.transform = `scale(1) rotate(${rotation}deg)`;
-          } else {
-            loader.classList.remove('visible');
-            spinner.style.transform = `scale(${currentY / 60})`;
-          }
-
-          // Prevent default scrolling if we are pulling specifically
-          if (e.cancelable && delta > 10) {
-            e.preventDefault();
-          }
-        } else {
-          // Restore if scrolling back up
-          resetPosition();
-        }
-      }, { passive: false });
-
-      document.body.addEventListener('touchend', async () => {
-        if (!isPulling || isRefreshing) return;
-
-        isPulling = false;
-        loader.style.transition = 'transform 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28)';
-        main.style.transition = 'transform 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28)';
-
-        if (currentY >= THRESHOLD) {
-          // Trigger Refresh
-          isRefreshing = true;
-          currentY = 60; // Snap to loading position
-
-          loader.style.transform = `translateY(${currentY}px)`;
-          main.style.transform = `translateY(${currentY}px)`;
-          spinner.classList.add('spinning');
-
-          // Haptic feedback if available
-          if (navigator.vibrate) navigator.vibrate(50);
-
-          try {
-            // ✅ Clear price cache to force fresh API call
-            CacheManager.clear();
-
-            // ✅ Fetch fresh data with new prices
-            await initDashboard();
-
-            ToastManager.success('Prices updated!');
-          } catch (err) {
-            console.error('Pull to refresh error:', err);
-            ToastManager.error('Update failed');
-          } finally {
-            setTimeout(() => {
-              isRefreshing = false;
-              spinner.classList.remove('spinning');
-              resetPosition();
-            }, 500); // Min delay suitable for UX
-          }
-
-        } else {
-          resetPosition();
-        }
-      });
-
-      function resetPosition() {
-        currentY = 0;
-        loader.style.transform = '';
-        main.style.transform = '';
-        setTimeout(() => {
-          loader.style.transition = '';
-          main.style.transition = '';
-        }, 300);
-      }
-    }
-
-    // Auto-refresh on app visibility change (desktop & mobile)
-    function initAutoRefreshOnOpen() {
-      let lastRefreshTime = 0; // Start at 0 to allow immediate first refresh
-      const MIN_REFRESH_INTERVAL = 3000; // Prevent refresh spam (3 seconds)
-
-      async function doRefresh(source) {
-        const now = Date.now();
-        if (now - lastRefreshTime < MIN_REFRESH_INTERVAL) {
-          console.log(`Skipping refresh (${source}) - too soon since last refresh`);
-          return;
-        }
-        
-        lastRefreshTime = now;
-        CacheManager.clear();
-        console.log(`${source} - refreshing prices...`);
-        await refreshData();
-        ToastManager.success('Prices updated!');
-      }
-
-      // Refresh when app becomes visible again (user returns to app/tab)
-      document.addEventListener('visibilitychange', async () => {
-        if (!document.hidden) {
-          await doRefresh('Visibility change');
-        }
-      });
-
-      // PWA-specific: Refresh when app is launched from home screen
-      // Check if running as PWA (standalone mode)
-      const isPWA = window.matchMedia('(display-mode: standalone)').matches || 
-                    window.navigator.standalone === true;
-      
-      if (isPWA) {
-        console.log('Running as PWA - enhanced refresh enabled');
-        
-        // Force immediate refresh on PWA launch
-        setTimeout(() => doRefresh('PWA launch'), 100);
-        
-        // pageshow event fires every time the page is displayed (including from cache)
-        window.addEventListener('pageshow', async (event) => {
-          // Refresh if page was restored from bfcache
-          if (event.persisted) {
-            await doRefresh('PWA pageshow (from cache)');
-          }
-        });
-
-        // Also listen for focus events (when user returns to PWA)
-        window.addEventListener('focus', async () => {
-          await doRefresh('PWA focus');
-        });
-      }
-    }
-
-    // History Chart Functions
-    // chartData is reused
-
-    async function updateHistoryChart(days) {
-      if (isLoadingChart) {
-        console.log('⏳ Chart update already in progress...');
-      }
-      // Cancel any in-flight fetch
-      if (currentChartController) {
-        currentChartController.abort();
-      }
-      currentChartController = new AbortController();
-      isLoadingChart = true;
-
-      currentPeriodDays = days;
-
-      // Update active buttons
-      document.querySelectorAll('.period-btn, .timeframe-btn').forEach(btn => {
-        btn.classList.remove('active');
-      });
-
-      document.querySelectorAll('.period-btn').forEach(btn => {
-        if (parseInt(btn.dataset.days) === days) btn.classList.add('active');
-      });
-
-      document.querySelectorAll('.timeframe-btn').forEach(btn => {
-        const btnText = btn.textContent;
-        const btnDays = {
-          '24H': 1, '1W': 7, '1M': 30, '3M': 90,
-          '6M': 180, '1Y': 365, 'ALL': 0
-        }[btnText];
-        if (btnDays === days) btn.classList.add('active');
-      });
-
-      // ✅ Show loading on BOTH desktop and mobile
-      const historyEmpty = document.getElementById('historyEmpty');
-      const chartStats = document.getElementById('chartStats');
-      const mobileLoading = document.getElementById('mobileChartLoading');
-      
-      // Show queue status if requests are pending
-      const queueStatus = apiRateLimiter.getStatus();
-      if (queueStatus.queueLength > 0) {
-        console.log(`📊 API Queue: ${queueStatus.queueLength} pending, ${queueStatus.currentRPS}/${queueStatus.maxRPS} RPS`);
-      }
-
-      if (historyEmpty) {
-        historyEmpty.innerHTML = `
-            <div class="skeleton-chart-container">
-                <div class="skeleton-spinner"></div>
-                <div style="font-size: 0.9rem; color: var(--text-muted);">Loading data...</div>
-            </div>
-        `;
-        historyEmpty.style.display = 'block';
-      }
-      if (chartStats) chartStats.style.display = 'none';
-
-      // ✅ Show mobile loading indicator
-      if (mobileLoading) {
-        mobileLoading.style.display = 'flex';
-        mobileLoading.querySelector('.loading-dots').textContent = 'Loading';
-      }
-
-      const apiDays = days === 0 ? 'max' : days;
-
-      try {
-        // Fetch performance data with signal and high priority (user-initiated)
-        const performance = await HistoricalPriceAPI.calculatePerformance(apiDays, {
-          signal: currentChartController.signal,
-          priority: 9 // High priority for visible chart
-        });
-
-        // ✅ Hide mobile loading on success
-        if (mobileLoading) {
-          mobileLoading.style.display = 'none';
-        }
-
-        // CACHE for Desktop Reset
-        if (performance) {
-          window.currentViewStats = performance;
-        }
-
-        if (!performance || !performance.history || performance.history.length < 2) {
-          if (historyEmpty) {
-            historyEmpty.innerHTML = `
-              <div style="text-align: center; padding: 40px;">
-                <div style="font-size: 2rem; margin-bottom: 8px;">📊</div>
-                <div>Not enough data yet</div>
-                <div style="font-size: 0.8rem; margin-top: 8px; color: var(--text-muted);">
-                  ${performance ? 'Only ' + performance.dataPoints + ' data point(s)' : 'Add purchase dates to your assets in the Manage page!'}
-                </div>
-              </div>
-            `;
-            historyEmpty.style.display = 'block';
-          }
-          return;
-        }
-
-        if (historyEmpty) historyEmpty.style.display = 'none';
-        if (chartStats) chartStats.style.display = 'flex';
-
-        chartData = performance.history;
-
-        // Update data quality badge
-        const dataBadge = document.getElementById('chartDataBadge');
-        if (dataBadge) {
-          dataBadge.style.display = 'inline-block';
-
-          if (performance.incomplete) {
-            dataBadge.className = 'chart-data-badge estimated';
-            dataBadge.textContent = '⚠ Partial Data';
-            dataBadge.title = 'Some assets failed to load due to API limits';
-          } else if (performance.isAccurate) {
-            dataBadge.className = 'chart-data-badge real';
-            dataBadge.textContent = '✓ Accurate';
-            dataBadge.title = 'Based on your actual purchase dates';
-          } else if (performance.isHypothetical) {
-            dataBadge.className = 'chart-data-badge estimated';
-            dataBadge.textContent = '⚠ Estimated';
-            dataBadge.title = 'Add purchase dates for accurate tracking';
-          } else {
-            dataBadge.className = 'chart-data-badge real';
-            dataBadge.textContent = '✓ Real Data';
-            dataBadge.title = 'Daily snapshot history';
-          }
-        }
-
-        // Update stats
-        document.getElementById('statHigh').textContent = PortfolioApp.formatCurrencyCompact(performance.high);
-        document.getElementById('statLow').textContent = PortfolioApp.formatCurrencyCompact(performance.low);
-        document.getElementById('statAvg').textContent = PortfolioApp.formatCurrencyCompact(performance.avg);
-
-        const isPositive = performance.change >= 0;
-        const statChangeEl = document.getElementById('statChange');
-        statChangeEl.textContent = `${isPositive ? '+' : ''}${performance.changePercent.toFixed(1)}%`;
-        statChangeEl.style.color = isPositive ? 'var(--profit-text)' : 'var(--loss-text)';
-
-        // Update performance header
-        const perfChange = document.getElementById('perfChange');
-        const perfChangeIcon = document.getElementById('perfChangeIcon');
-        const perfChangeValue = document.getElementById('perfChangeValue');
-
-        if (perfChange) {
-          perfChange.className = `performance-change ${isPositive ? 'positive' : 'negative'}`;
-          perfChangeIcon.textContent = isPositive ? '↑' : '↓';
-          perfChangeValue.textContent = `${isPositive ? '+' : ''}${performance.changePercent.toFixed(1)}%`;
-        }
-
-        // NOTE: Mobile Hero PnL now shows TOTAL P/L (from cost basis) not timeframe-based
-        // It's updated in updateUI() function to match desktop totalProfitValue behavior
-
-        // Draw charts
-        drawEnhancedLineChart(performance.history, 'historyChart');
-        drawMiniChart(performance.history, 'heroMiniChart');
-
-      } catch (error) {
-        if (error.name === 'AbortError') {
-          console.log('⏹️ Chart update cancelled');
-          return;
-        }
-        console.error('Error loading historical data:', error);
-
-        // ✅ Hide mobile loading on error
-        if (mobileLoading) {
-          mobileLoading.style.display = 'none';
-        }
-
-        if (historyEmpty) {
-          historyEmpty.innerHTML = `
-            <div style="text-align: center; padding: 40px;">
-              <div style="font-size: 2rem; margin-bottom: 8px;">⚠️</div>
-              <div>Failed to load data</div>
-              <div style="font-size: 0.8rem; margin-top: 4px;">${error.message}</div>
-            </div>
-          `;
-          historyEmpty.style.display = 'block';
-        }
-      } finally {
-        if (currentChartController && !currentChartController.signal.aborted) {
-          isLoadingChart = false;
-          currentChartController = null;
-        }
-      }
-    }
-
-
-    function drawEnhancedLineChart(data, canvasId) {
-      const canvas = document.getElementById(canvasId);
-      if (!canvas) return;
-
-      // Prevent drawing on hidden/zero-sized canvas (Fixes IndexSizeError)
-      if (canvas.clientWidth === 0 || canvas.clientHeight === 0) return;
-
-      // CLEANUP OLD LISTENERS
-      if (canvas._chartCleanup) {
-        canvas._chartCleanup();
-      }
-
-      chartCanvas = canvas;
-      const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      chartCtx = ctx;
-      const rect = canvas.parentElement.getBoundingClientRect();
-
-      // High DPI support
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      canvas.style.width = rect.width + 'px';
-      canvas.style.height = rect.height + 'px';
-      ctx.scale(dpr, dpr);
-
-      const width = rect.width;
-      const height = rect.height;
-      const padding = { top: 20, right: 15, bottom: 25, left: 15 };
-
-      const values = data.map(d => d.total);
-      const minVal = Math.min(...values) * 0.995;
-      const maxVal = Math.max(...values) * 1.005;
-
-      ctx.clearRect(0, 0, width, height);
-
-      // Draw grid lines
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
-      ctx.lineWidth = 1;
-      for (let i = 0; i <= 4; i++) {
-        const y = padding.top + (i / 4) * (height - padding.top - padding.bottom);
-        ctx.beginPath();
-        ctx.moveTo(padding.left, y);
-        ctx.lineTo(width - padding.right, y);
-        ctx.stroke();
-      }
-
-      // Calculate points
-      const points = data.map((d, i) => ({
-        x: padding.left + (i / (data.length - 1)) * (width - padding.left - padding.right),
-        y: padding.top + (1 - (d.total - minVal) / (maxVal - minVal)) * (height - padding.top - padding.bottom),
-        data: d
-      }));
-
-      // Draw gradient fill
-      ctx.beginPath();
-      ctx.moveTo(points[0].x, height - padding.bottom);
-      points.forEach(p => ctx.lineTo(p.x, p.y));
-      ctx.lineTo(points[points.length - 1].x, height - padding.bottom);
-      ctx.closePath();
-
-      const gradient = ctx.createLinearGradient(0, padding.top, 0, height - padding.bottom);
-      // Use a generic gradient fill that matches the line (Violet base)
-      gradient.addColorStop(0, 'rgba(138, 43, 226, 0.15)'); // Violet low opacity
-      gradient.addColorStop(1, 'rgba(138, 43, 226, 0)');
-
-      ctx.fillStyle = gradient;
-      ctx.fill();
-
-      // Draw line
-      // Create Line Gradient (Salmon to Violet)
-      const lineGradient = ctx.createLinearGradient(0, 0, width, 0);
-      lineGradient.addColorStop(0, '#ff9a9e'); // Salmon
-      lineGradient.addColorStop(1, '#8a2be2'); // Violet
-
-      ctx.beginPath();
-      // Use the gradient for the line
-      ctx.strokeStyle = lineGradient;
-      ctx.lineWidth = 2.5;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      points.forEach((p, i) => {
-        if (i === 0) ctx.moveTo(p.x, p.y);
-        else ctx.lineTo(p.x, p.y);
-      });
-      ctx.stroke();
-
-      // Store points for tooltip
-      canvas._chartPoints = points;
-
-      // Save the clean state (chart only, no crosshair)
-      canvas._baseImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      canvas._ctx = ctx; // Store context for reuse
-
-      // Add mouse interaction with cleanup
-      const handlers = {
-        mousemove: (e) => handleChartHover(e, canvas, points),
-        mouseleave: () => hideChartTooltip(canvas),
-        touchstart: (e) => {
-          if (e.target === canvas) e.preventDefault();
-        },
-        touchmove: null, // assigned below
-        touchend: () => {
-          isTouching = false;
-          clearTimeout(touchTimeout);
-          // Small delay before resetting to give user time to read final value
-          touchTimeout = setTimeout(() => {
-            hideChartTooltip(canvas);
-          }, 800);
-        },
-        touchcancel: () => {
-          clearTimeout(touchTimeout);
-          hideChartTooltip(canvas);
-        }
-      };
-
-      let touchTimeout;
-
-      handlers.touchmove = (e) => {
-        if (e.target === canvas) e.preventDefault();
-        const touch = e.touches[0];
-        clearTimeout(touchTimeout);
-        handleChartHover({ clientX: touch.clientX, clientY: touch.clientY }, canvas, points);
-        // Don't auto-hide while touching - stats stay frozen at scrub position
-      };
-
-      // Attach new listeners
-      Object.entries(handlers).forEach(([event, handler]) => {
-        canvas.addEventListener(event, handler, { passive: false });
-      });
-
-      // Store cleanup function
-      canvas._chartCleanup = () => {
-        Object.entries(handlers).forEach(([event, handler]) => {
-          canvas.removeEventListener(event, handler);
-        });
-        clearTimeout(touchTimeout);
-        delete canvas._chartPoints;
-        delete canvas._baseImage;
-        delete canvas._ctx;
-      };
-    }
-
-    function handleChartHover(e, canvas, points) {
-      if (!canvas) return;
-
-      const now = Date.now();
-      // Throttle redraws to 60fps
-      if (now - lastDrawTime < DRAW_THROTTLE) {
-        return;
-      }
-      lastDrawTime = now;
-
-      const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const ctx = canvas._ctx;
-
-      // Find closest point
-      let closest = points[0];
-      let minDist = Math.abs(x - points[0].x);
-
-      points.forEach(p => {
-        const dist = Math.abs(x - p.x);
-        if (dist < minDist) {
-          minDist = dist;
-          closest = p;
-        }
-      });
-
-      // Restore base image (clears previous crosshair)
-      if (canvas._baseImage) {
-        ctx.putImageData(canvas._baseImage, 0, 0);
-      }
-
-      // Draw Crosshair (Vertical Line)
-      ctx.beginPath();
-      ctx.moveTo(closest.x, 20); // padding.top
-      ctx.lineTo(closest.x, canvas.height / window.devicePixelRatio - 25); // height - padding.bottom
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([4, 4]); // Dashed line
-      ctx.stroke();
-      ctx.setLineDash([]); // Reset dash
-
-      // Draw Active Point (Outer Glow)
-      ctx.beginPath();
-      ctx.arc(closest.x, closest.y, 8, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(138, 43, 226, 0.2)';
-      ctx.fill();
-
-      // Draw Active Point (Inner Circle)
-      ctx.beginPath();
-      ctx.arc(closest.x, closest.y, 4, 0, Math.PI * 2);
-      ctx.fillStyle = '#fff';
-      ctx.fill();
-      ctx.strokeStyle = '#8a2be2';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      // Mobile Handling: Update Hero Stats instead of Tooltip
-      if (canvas.id === 'heroMiniChart') {
-        const startData = points[0].data;
-        updateHeroStats(closest.data, startData);
-      } else if (canvas.id === 'historyChart') {
-        const startData = points[0].data;
-        updateDesktopStats(closest.data, startData);
-        // Also show tooltip for precision
-        showChartTooltip(e.clientX, e.clientY, closest, canvas);
-      } else {
-        showChartTooltip(e.clientX, e.clientY, closest, canvas);
-      }
-    }
-
-    // New function to update hero stats on mobile scrub
-    function updateHeroStats(data, baseData) {
-      const balanceEl = document.getElementById('heroTotalValue');
-      const pnlContainer = document.getElementById('heroPnlContainer');
-      const dateEl = document.getElementById('heroScrubDate');
-      const pnlAmountEl = document.getElementById('heroPnlAmount');
-      const pnlPercentEl = document.getElementById('heroPnlPercent');
-      const pnlBadge = document.getElementById('heroPnlBadge');
-
-      if (balanceEl) balanceEl.textContent = PortfolioApp.formatCurrency(data.total);
-
-      // Calculate PnL relative to the start of the chart (timeframe)
-      let change = 0;
-      let percent = 0;
-
-      if (baseData && baseData.total > 0) {
-        change = data.total - baseData.total;
-        percent = (change / baseData.total) * 100;
-      }
-
-      const isPositive = change >= 0;
-      const sign = isPositive ? '+' : '';
-      const color = isPositive ? 'var(--profit-text)' : 'var(--loss-text)';
-
-      if (pnlAmountEl) {
-        pnlAmountEl.textContent = `${sign}${PortfolioApp.formatCurrency(change)}`;
-        pnlAmountEl.style.color = color;
-        pnlAmountEl.style.display = '';
-      }
-
-      if (pnlPercentEl) {
-        pnlPercentEl.textContent = `(${sign}${percent.toFixed(2)}%)`;
-        pnlPercentEl.style.color = color;
-        pnlPercentEl.style.display = '';
-      }
-
-      if (pnlBadge) {
-        pnlBadge.className = `mobile-pnl-badge ${isPositive ? 'positive' : 'negative'}`;
-      }
-
-      // Show PnL container
-      if (pnlContainer) pnlContainer.style.display = 'flex';
-
-      // Show Date
-      if (dateEl) {
-        const date = new Date(data.timestampOriginal || data.timestamp || data.date);
-        dateEl.textContent = date.toLocaleDateString('en-US', {
-          weekday: 'short',
-          month: 'short',
-          day: 'numeric',
-          hour: 'numeric',
-          minute: '2-digit'
-        });
-        dateEl.style.display = 'block';
-      }
-    }
-
-    // Reset Mobile Stats
-    function resetHeroStats() {
-      const balanceEl = document.getElementById('heroTotalValue');
-      const pnlContainer = document.getElementById('heroPnlContainer');
-      const dateEl = document.getElementById('heroScrubDate');
-      const pnlAmountEl = document.getElementById('heroPnlAmount');
-      const pnlPercentEl = document.getElementById('heroPnlPercent');
-      const pnlBadge = document.getElementById('heroPnlBadge');
-
-      if (dateEl) dateEl.style.display = 'none';
-
-      // Restore from window.currentViewStats which matches the active chart view
-      if (window.currentViewStats) {
-        // Fix: Use live data for the main balance number if available
-        if (window.lastPortfolioData && balanceEl) {
-          balanceEl.textContent = PortfolioApp.formatCurrency(window.lastPortfolioData.grandTotal);
-        } else if (balanceEl) {
-          balanceEl.textContent = PortfolioApp.formatCurrency(window.currentViewStats.newest);
-        }
-
-        const isPositive = window.currentViewStats.change >= 0;
-        const sign = isPositive ? '+' : '';
-        const color = isPositive ? 'var(--success)' : 'var(--danger)';
-        // Note: CSS vars might not be defined in inline style, use class or explicit color
-        // Actually .positive/.negative classes handle color in CSS
-
-        if (pnlBadge) pnlBadge.className = `mobile-pnl-badge ${isPositive ? 'positive' : 'negative'}`;
-
-        if (pnlAmountEl) {
-          pnlAmountEl.textContent = `${sign}${PortfolioApp.formatCurrency(window.currentViewStats.change)}`;
-          pnlAmountEl.className = `mobile-pnl-amount ${isPositive ? 'positive' : 'negative'}`;
-          // Remove manual color to let class handle it
-          pnlAmountEl.style.color = '';
-        }
-
-        if (pnlPercentEl) {
-          pnlPercentEl.textContent = `${isPositive ? '↑' : '↓'} ${sign}${window.currentViewStats.changePercent.toFixed(1)}%`;
-          pnlPercentEl.style.color = '';
-        }
-      }
-    }
-
-    // Update Desktop Stats on Hover
-    function updateDesktopStats(data, baseData) {
-      const valueEl = document.getElementById('perfCurrentValue');
-      const changeEl = document.getElementById('perfChange');
-      const changeValueEl = document.getElementById('perfChangeValue');
-      const changeIconEl = document.getElementById('perfChangeIcon');
-      const badgeEl = document.getElementById('chartDataBadge');
-      const dateEl = document.getElementById('perfScrubDate'); // Added date element
-
-      if (valueEl) valueEl.textContent = PortfolioApp.formatCurrency(data.total);
-
-      // Hide accuracy badge while scrubbing
-      if (badgeEl) badgeEl.style.opacity = '0.5';
-
-      // Update Date
-      if (dateEl) {
-        const date = new Date(data.timestampOriginal || data.timestamp || data.date);
-        dateEl.textContent = date.toLocaleDateString('en-US', {
-          weekday: 'short',
-          year: 'numeric',
-          month: 'short',
-          day: 'numeric',
-          hour: 'numeric',
-          minute: '2-digit'
-        });
-        dateEl.style.display = 'block';
-      }
-
-      // Calculate Change relative to start of chart
-      let change = 0;
-      let percent = 0;
-      if (baseData && baseData.total > 0) {
-        change = data.total - baseData.total;
-        percent = (change / baseData.total) * 100;
-      }
-
-      const isPositive = change >= 0;
-      if (changeEl) {
-        changeEl.className = `performance-change ${isPositive ? 'positive' : 'negative'}`;
-      }
-      if (changeValueEl) {
-        changeValueEl.textContent = `${isPositive ? '+' : ''}${percent.toFixed(2)}%`;
-      }
-      if (changeIconEl) {
-        changeIconEl.textContent = isPositive ? '↑' : '↓';
-      }
-    }
-
-    // Reset Desktop Stats on Mouse Leave
-    function resetDesktopStats() {
-      const valueEl = document.getElementById('perfCurrentValue');
-      const changeEl = document.getElementById('perfChange');
-      const changeValueEl = document.getElementById('perfChangeValue');
-      const changeIconEl = document.getElementById('perfChangeIcon');
-      const badgeEl = document.getElementById('chartDataBadge');
-      const dateEl = document.getElementById('perfScrubDate');
-
-      if (badgeEl) badgeEl.style.opacity = '1';
-      if (dateEl) dateEl.style.display = 'none';
-
-      if (window.lastPortfolioData) {
-        const { grandTotal, totalProfitLossPercent } = window.lastPortfolioData;
-
-        // Wait, window.lastPortfolioData only has current total and All-Time PnL?
-        // Actually, updateHistoryChart sets these values based on the *selected timeframe*.
-        // We should store the "active timeframe stats" somewhere to reset to.
-        // Or re-calculate?
-        // Let's store the current displayed stats in data attributes before hovering?
-        // No, simplest is to re-trigger a UI update from the active button context, 
-        // OR better: cache the "current view stats" in a global object when updateHistoryChart finishes.
-      }
-
-      // Fallback: If we have lastPortfolioData, we can at least show current balance.
-      // But PnL needs to match the selected button (e.g. 24H change, not All Time).
-
-      // Let's try to parse the "active" button's intent or use a cached "currentStats" object.
-      // For now, let's look at updateHistoryChart again to see where it gets the data.
-      // It uses HistoricalPriceAPI.calculateStats(days).
-
-      // Strategy: When updateHistoryChart runs, save the result to window.currentViewStats.
-      if (window.currentViewStats) {
-        // Fix: Use live data for the main balance number if available
-        if (window.lastPortfolioData && valueEl) {
-          valueEl.textContent = PortfolioApp.formatCurrency(window.lastPortfolioData.grandTotal);
-        } else if (valueEl) {
-          valueEl.textContent = PortfolioApp.formatCurrency(window.currentViewStats.newest);
-        }
-
-        const isPositive = window.currentViewStats.change >= 0;
-        if (changeEl) changeEl.className = `performance-change ${isPositive ? 'positive' : 'negative'}`;
-        if (changeValueEl) changeValueEl.textContent = `${isPositive ? '+' : ''}${window.currentViewStats.changePercent.toFixed(2)}%`;
-        if (changeIconEl) changeIconEl.textContent = isPositive ? '↑' : '↓';
-      }
-    }
-
-
-
-    function showChartTooltip(mouseX, mouseY, point, canvas) {
-      const tooltip = document.getElementById('chartTooltipFloating');
-      if (!tooltip) return;
-
-      const dateEl = tooltip.querySelector('.chart-tooltip-date');
-      const valueEl = tooltip.querySelector('.chart-tooltip-value');
-
-      const date = new Date(point.data.timestampOriginal || point.data.timestamp || point.data.date);
-      dateEl.textContent = date.toLocaleDateString('en-US', {
-        month: 'short', day: 'numeric', year: 'numeric'
-      });
-      valueEl.textContent = PortfolioApp.formatCurrency(point.data.total);
-
-      // Position tooltip
-      const rect = canvas.parentElement.getBoundingClientRect();
-
-      // Calculate position relative to viewport, but anchored to point
-      let left = rect.left + point.x;
-      let top = rect.top + point.y - 50;
-
-      // Ensure tooltip doesn't go off screen
-      const tooltipRect = tooltip.getBoundingClientRect();
-
-      // Horizontal bounds
-      if (left - tooltipRect.width / 2 < 10) left = 10 + tooltipRect.width / 2;
-      if (left + tooltipRect.width / 2 > window.innerWidth - 10) left = window.innerWidth - 10 - tooltipRect.width / 2;
-
-      // Vertical bounds (if too high, show below point)
-      if (top < 10) top = rect.top + point.y + 20;
-
-      tooltip.style.left = left + 'px';
-      tooltip.style.top = top + 'px';
-      tooltip.style.transform = 'translate(-50%, 0)'; // Center horizontally
-      tooltip.classList.add('visible');
-    }
-
-    function hideChartTooltip(canvas) {
-      const tooltip = document.getElementById('chartTooltipFloating');
-      if (tooltip) tooltip.classList.remove('visible');
-
-      // Reset Hero Stats (Mobile)
-      if (canvas && canvas.id === 'heroMiniChart') {
-        resetHeroStats();
-      }
-
-      // Reset Desktop Stats
-      if (canvas && canvas.id === 'historyChart') {
-        resetDesktopStats();
-      }
-
-      // Restore clean chart
-      if (canvas && canvas._baseImage && canvas._ctx) {
-        // ... (rest of function)
-        canvas._ctx.putImageData(canvas._baseImage, 0, 0);
-      }
-    }
-
-
-
-
-    function drawMiniChart(data, canvasId) {
-      const canvas = document.getElementById(canvasId);
-      if (!canvas) return;
-
-      // Preventdrawing on hidden/zero-sized canvas
-      // Prevent drawing on hidden/zero-sized canvas (Fixes IndexSizeError)
-      if (canvas.clientWidth === 0 || canvas.clientHeight === 0) return;
-
-      // CLEANUP OLD LISTENERS
-      if (canvas._chartCleanup) {
-        canvas._chartCleanup();
-      }
-
-      const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      const rect = canvas.parentElement.getBoundingClientRect();
-
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      canvas.style.width = rect.width + 'px';
-      canvas.style.height = rect.height + 'px';
-      ctx.scale(dpr, dpr);
-
-      const width = rect.width;
-      const height = rect.height;
-      const padding = { top: 5, right: 5, bottom: 5, left: 5 };
-
-      const values = data.map(d => d.total);
-      let minVal = Math.min(...values) * 0.99;
-      let maxVal = Math.max(...values) * 1.01;
-
-      // Handle flat line case (prevent division by zero)
-      if (maxVal === minVal) {
-        maxVal = minVal + 1; // Arbitrary range
-        if (minVal === 0) {
-          maxVal = 1; // Handle all zeros
-        }
-      }
-
-      ctx.clearRect(0, 0, width, height);
-
-      const isPositive = values[values.length - 1] >= values[0];
-
-      // Draw line
-      const lineGradient = ctx.createLinearGradient(0, 0, width, 0);
-      lineGradient.addColorStop(0, '#ff9a9e'); // Salmon
-      lineGradient.addColorStop(1, '#8a2be2'); // Violet
-
-      ctx.beginPath();
-      ctx.strokeStyle = lineGradient;
-      ctx.lineWidth = 2;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-
-      const points = []; // Store points for interaction
-
-      data.forEach((d, i) => {
-        const x = padding.left + (i / (data.length - 1)) * (width - padding.left - padding.right);
-        const y = padding.top + (1 - (d.total - minVal) / (maxVal - minVal)) * (height - padding.top - padding.bottom);
-
-        points.push({ x, y, data: d }); // Save point
-
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      });
-      ctx.stroke();
-
-      // Add gradient fill
-      const lastX = padding.left + (1) * (width - padding.left - padding.right);
-      ctx.lineTo(lastX, height - padding.bottom);
-      ctx.lineTo(padding.left, height - padding.bottom);
-      ctx.closePath();
-
-      const gradient = ctx.createLinearGradient(0, 0, 0, height);
-      // Neutral Violet Fill
-      gradient.addColorStop(0, 'rgba(138, 43, 226, 0.1)');
-      gradient.addColorStop(1, 'transparent');
-      ctx.fillStyle = gradient;
-      ctx.fill();
-
-      // INTERACTION SETUP
-      canvas._chartPoints = points;
-      canvas._baseImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      canvas._ctx = ctx;
-
-      // Add mouse interaction with cleanup
-      const handlers = {
-        mousemove: (e) => handleChartHover(e, canvas, points),
-        mouseleave: () => hideChartTooltip(canvas),
-        touchstart: (e) => {
-          if (e.target === canvas) e.preventDefault();
-        },
-        touchmove: null, // assigned below
-        touchend: () => {
-          isTouching = false;
-          clearTimeout(touchTimeout);
-          // Small delay before resetting to give user time to read final value
-          touchTimeout = setTimeout(() => {
-            hideChartTooltip(canvas);
-          }, 800);
-        },
-        touchcancel: () => {
-          clearTimeout(touchTimeout);
-          hideChartTooltip(canvas);
-        }
-      };
-
-      let touchTimeout;
-
-      handlers.touchmove = (e) => {
-        if (e.target === canvas) e.preventDefault();
-        const touch = e.touches[0];
-        isTouching = true;
-        clearTimeout(touchTimeout);
-        handleChartHover({ clientX: touch.clientX, clientY: touch.clientY }, canvas, points);
-        // Don't auto-hide while touching - stats stay frozen at scrub position
-      };
-
-      // Attach new listeners
-      Object.entries(handlers).forEach(([event, handler]) => {
-        canvas.addEventListener(event, handler, { passive: false });
-      });
-
-      // Store cleanup function
-      canvas._chartCleanup = () => {
-        Object.entries(handlers).forEach(([event, handler]) => {
-          canvas.removeEventListener(event, handler);
-        });
-        clearTimeout(touchTimeout);
-        delete canvas._chartPoints;
-        delete canvas._baseImage;
-        delete canvas._ctx;
-      };
-    }
-
-    // Offline Detection
-    const offlineIndicator = document.getElementById('offlineIndicator');
-
-    function updateOnlineStatus() {
-      if (navigator.onLine) {
-        offlineIndicator.classList.remove('visible');
-        ToastManager.success('Back online!');
-      } else {
-        offlineIndicator.classList.add('visible');
-        ToastManager.warning('You are offline');
-      }
-    }
-
-    window.addEventListener('online', updateOnlineStatus);
-    window.addEventListener('offline', updateOnlineStatus);
-
-    // Initial check
-    if (!navigator.onLine) updateOnlineStatus();
-
-    // Initialize on load
-    document.addEventListener('DOMContentLoaded', () => {
-      // Initialize managers
-      ThemeManager.init();
-      CurrencyManager.init();
-
-      // Update theme icons
-      const theme = ThemeManager.get();
-      document.getElementById('themeIcon').textContent = theme === 'dark' ? '🌙' : '☀️';
-      const mobileThemeBtn = document.getElementById('mobileThemeBtn');
-      if (mobileThemeBtn) mobileThemeBtn.textContent = theme === 'dark' ? '🌙' : '☀️';
-
-      // Set currency selector
-      document.getElementById('currencySelect').value = CurrencyManager.current;
-
-      initMobileMode();
-      initMobileMode();
-      // initTabSystem() removed
-      initBottomNav();
-      initBottomNav();
-      
-      // Clear price cache to force fresh prices on app open (both desktop & mobile)
-      CacheManager.clear();
-      console.log('Clearing cache for fresh prices on app open');
-      
-      initDashboard();
-      initPullToRefresh(); // Initialize Pull to Refresh
-      initAutoRefreshOnOpen(); // Auto-refresh prices on app visibility change
-
-      // Initialize history chart
-      updateHistoryChart(7);
-
-      let chartDrawTimer = null;
-
-      function debouncedChartDraw(data) {
-        clearTimeout(chartDrawTimer);
-        chartDrawTimer = setTimeout(() => {
-          if (data && data.length > 0) {
-            drawMiniChart(data, 'heroMiniChart');
-            drawEnhancedLineChart(data, 'historyChart');
-          }
-          if (window.portfolioChart) {
-            window.portfolioChart.setupCanvas();
-            window.portfolioChart.draw();
-          }
-        }, 100);
-      }
-
-      let resizeTimeout;
-      window.addEventListener('resize', () => {
-        clearTimeout(resizeTimeout);
-        resizeTimeout = setTimeout(() => {
-          debouncedChartDraw(chartData);
-        }, 150);
-      });
-
-      // Register Service Worker (only on http/https)
-      if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.protocol === 'http:')) {
-        navigator.serviceWorker.register('./service-worker.js')
-          .then(reg => console.log('SW registered'))
-          .catch(err => console.log('SW registration failed', err));
-      }
-    });
-  </script>
 </body>
 
 </html>
