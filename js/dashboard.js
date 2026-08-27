@@ -199,7 +199,9 @@
       const applyMobileMode = (isMobile) => {
         if (isMobile) {
           document.body.classList.add('mobile-mode');
-          switchMobileView('assets');
+          if ((document.body.dataset.route || 'dashboard') === 'dashboard') {
+            switchMobileView(lastDashboardSubview || 'assets');
+          }
         } else {
           document.body.classList.remove('mobile-mode');
           document.getElementById('chartSection').style.display = '';

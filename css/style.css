@@ -308,8 +308,8 @@ body.mobile-mode .dashboard-grid {
   /* Remove grid to stack items or control visibility */
 }
 
-/* Tab Content Visibility in Mobile Mode */
-body.mobile-mode .card {
+/* Tab Content Visibility in Mobile Mode (dashboard only) */
+body.mobile-mode #view-dashboard .card {
   display: none;
   /* Hide cards by default in mobile mode */
   border: none;
@@ -317,7 +317,7 @@ body.mobile-mode .card {
   padding: 0;
 }
 
-body.mobile-mode .card.active-tab {
+body.mobile-mode #view-dashboard .card.active-tab {
   display: block;
   animation: fadeIn 0.3s ease;
 }
@@ -1588,8 +1588,8 @@ body.mobile-mode .fixed-mobile-toggle {
   display: flex;
   justify-content: space-around;
   align-items: center;
-  max-width: 400px;
-  margin: 0 auto;
+  width: 100%;
+  max-width: none;
 }
 
 .bottom-nav-item {
@@ -1597,7 +1597,7 @@ body.mobile-mode .fixed-mobile-toggle {
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  padding: 8px 10px;
+  padding: 8px 4px;
   background: none;
   border: none;
   color: var(--text-muted);
@@ -1607,7 +1607,8 @@ body.mobile-mode .fixed-mobile-toggle {
   transition: all 0.2s ease;
   border-radius: var(--radius-sm);
   text-decoration: none;
-  min-width: 44px;
+  flex: 1;
+  min-width: 0;
   min-height: 44px;
   justify-content: center;
 }
@@ -1992,7 +1993,7 @@ body.mobile-mode .dashboard-grid {
   padding: 0;
 }
 
-body.mobile-mode .card {
+body.mobile-mode #view-dashboard .card {
   background: transparent;
   border: none;
   padding: 0;
@@ -2000,7 +2001,7 @@ body.mobile-mode .card {
   margin: 0;
 }
 
-body.mobile-mode .card:hover {
+body.mobile-mode #view-dashboard .card:hover {
   box-shadow: none;
 }
 
@@ -2345,6 +2346,27 @@ html[data-boot-route="rebalance"] #view-rebalance {
 body.mobile-mode #view-dashboard.is-active {
   display: flex;
   flex-direction: column;
+}
+
+body.mobile-mode #view-manage.is-active,
+body.mobile-mode #view-rebalance.is-active {
+  display: block;
+  padding: 12px 16px 24px;
+}
+
+body.mobile-mode #view-manage .card,
+body.mobile-mode #view-rebalance .card {
+  display: block;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md);
+  margin: 0 0 var(--spacing-md);
+}
+
+body.mobile-mode #view-manage .card:hover,
+body.mobile-mode #view-rebalance .card:hover {
+  box-shadow: none;
 }
 
 .nav-link.active {
